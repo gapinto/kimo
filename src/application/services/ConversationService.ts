@@ -610,7 +610,8 @@ Digite o número ou o nome do comando:`;
       return;
     }
 
-    session.data.registration = { ...(session.data.registration || {}), earnings };
+    const currentReg = (session.data.registration as Record<string, any>) || {};
+    session.data.registration = { ...currentReg, earnings };
 
     const message = `✅ R$ ${earnings.toFixed(2)} de ganhos
 
@@ -633,7 +634,8 @@ Digite apenas o número (ex: 150):`;
       return;
     }
 
-    session.data.registration = { ...(session.data.registration || {}), km };
+    const currentReg = (session.data.registration as Record<string, any>) || {};
+    session.data.registration = { ...currentReg, km };
 
     const message = `✅ ${km} km rodados
 
@@ -656,7 +658,8 @@ Digite apenas o valor (ex: 70):`;
       return;
     }
 
-    session.data.registration = { ...(session.data.registration || {}), fuel };
+    const currentReg = (session.data.registration as Record<string, any>) || {};
+    session.data.registration = { ...currentReg, fuel };
 
     const message = `✅ R$ ${fuel.toFixed(2)} de combustível
 
@@ -683,7 +686,8 @@ Digite o valor total ou "0" se não teve:`;
       return;
     }
 
-    session.data.registration = { ...(session.data.registration || {}), otherExpenses };
+    const currentReg = (session.data.registration as Record<string, any>) || {};
+    session.data.registration = { ...currentReg, otherExpenses };
 
     // Calcular lucro
     const reg = session.data.registration as any;
