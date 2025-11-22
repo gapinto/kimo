@@ -37,15 +37,18 @@ export class EvolutionAPIProvider implements IMessagingProvider {
 
   async sendTextMessage(input: SendMessageInput): Promise<SendMessageOutput> {
     try {
+      const formattedNumber = this.formatPhoneNumber(input.to);
+      
       logger.info('Sending WhatsApp message', {
         to: input.to,
+        formattedNumber,
         messageLength: input.message.length,
       });
 
       const response = await this.client.post(
         `/message/sendText/${this.instanceName}`,
         {
-          number: this.formatPhoneNumber(input.to),
+          number: formattedNumber,
           text: input.message,
         }
       );
