@@ -1,6 +1,9 @@
 import { Money } from '../value-objects/Money';
 import { ExpenseType } from '../enums';
 
+// Re-export ExpenseType for backwards compatibility
+export { ExpenseType };
+
 export interface ExpenseProps {
   id: string;
   userId: string;

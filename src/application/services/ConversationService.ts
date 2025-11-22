@@ -610,7 +610,7 @@ Digite o número ou o nome do comando:`;
       return;
     }
 
-    session.data.registration = { ...session.data.registration, earnings };
+    session.data.registration = { ...(session.data.registration || {}), earnings };
 
     const message = `✅ R$ ${earnings.toFixed(2)} de ganhos
 
@@ -633,7 +633,7 @@ Digite apenas o número (ex: 150):`;
       return;
     }
 
-    session.data.registration = { ...session.data.registration, km };
+    session.data.registration = { ...(session.data.registration || {}), km };
 
     const message = `✅ ${km} km rodados
 
@@ -656,7 +656,7 @@ Digite apenas o valor (ex: 70):`;
       return;
     }
 
-    session.data.registration = { ...session.data.registration, fuel };
+    session.data.registration = { ...(session.data.registration || {}), fuel };
 
     const message = `✅ R$ ${fuel.toFixed(2)} de combustível
 
@@ -683,7 +683,7 @@ Digite o valor total ou "0" se não teve:`;
       return;
     }
 
-    session.data.registration = { ...session.data.registration, otherExpenses };
+    session.data.registration = { ...(session.data.registration || {}), otherExpenses };
 
     // Calcular lucro
     const reg = session.data.registration as any;

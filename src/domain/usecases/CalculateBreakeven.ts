@@ -7,6 +7,7 @@ import { DriverProfile } from '../enums';
 export interface CalculateBreakevenInput {
   userId: string;
   referenceDate: Date;
+  date?: Date;  // Optional alias for referenceDate
 }
 
 export interface CalculateBreakevenOutput {
@@ -42,9 +43,11 @@ export class CalculateBreakeven {
       throw new Error('User ID is required');
     }
 
-    if (!input.date) {
+    if (!input.referenceDate && !input.date) {
       throw new Error('Reference date is required');
     }
+
+    const referenceDate = input.referenceDate || input.date!;
 
     // Buscar config do motorista
     const config = await this.driverConfigRepo.findByUserId(input.userId);

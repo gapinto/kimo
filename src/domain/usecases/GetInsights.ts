@@ -58,7 +58,7 @@ export class GetInsights {
 
     const totalKm = await this.tripRepo.getTotalKmByUserAndDate(input.userId, input.date);
 
-    const totalExpenses = await this.expenseRepository.getTotalExpensesByUserAndDate(
+    const totalExpenses = await this.expenseRepo.getTotalExpensesByUserAndDate(
       input.userId,
       input.date
     );

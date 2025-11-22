@@ -185,7 +185,7 @@ export class SupabaseDailySummaryRepository implements IDailySummaryRepository {
   // Helpers privados
   private toDomain(row: DailySummaryRow): DailySummary {
     return DailySummary.restore({
-      id: row.id,
+      id: row.id || '',
       userId: row.user_id,
       date: new Date(row.date),
       earnings: Money.create(row.earnings),

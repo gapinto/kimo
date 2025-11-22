@@ -5,7 +5,6 @@ import {
 } from '../dtos/WhatsAppMessageDTO';
 import { ConversationService } from '../services/ConversationService';
 import { logger } from '../../shared/utils/logger';
-import { AppError } from '../../shared/errors/AppError';
 
 /**
  * WhatsAppWebhookController
