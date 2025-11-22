@@ -13,14 +13,25 @@ export class Phone {
   public static create(phone: string): Phone {
     const cleaned = phone.replace(/\D/g, '');
 
-    // Valida formato brasileiro: deve ter 10 ou 11 dígitos
-    // Ex: 11999999999 ou 1133334444
-    if (cleaned.length < 10 || cleaned.length > 11) {
+    // Valida formato brasileiro:
+    // - 10 ou 11 dígitos (sem código do país): 1133334444 ou 11999999999
+    // - 12 ou 13 dígitos (com código do país 55): 551133334444 ou 5511999999999
+    if (cleaned.length < 10 || cleaned.length > 13) {
       throw new Error('Invalid phone number format');
     }
 
     // Adiciona código do país se não tiver
-    const withCountryCode = cleaned.startsWith('55') ? cleaned : `55${cleaned}`;
+    let withCountryCode: string;
+    if (cleaned.startsWith('55')) {
+      withCountryCode = cleaned;
+    } else {
+      withCountryCode = `55${cleaned}`;
+    }
+
+    // Valida tamanho final
+    if (withCountryCode.length < 12 || withCountryCode.length > 13) {
+      throw new Error('Invalid phone number format');
+    }
 
     return new Phone(withCountryCode);
   }
