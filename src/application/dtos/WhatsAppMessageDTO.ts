@@ -8,8 +8,11 @@ export interface WhatsAppWebhookPayload {
   data: {
     key: {
       remoteJid: string;
+      remoteJidAlt?: string; // Número real quando vem de canal
       fromMe: boolean;
       id: string;
+      participant?: string;
+      addressingMode?: string;
     };
     pushName: string;
     message?: {
@@ -47,8 +50,11 @@ export function parseEvolutionAPIWebhook(
     return null;
   }
 
+  // Usar remoteJidAlt se disponível (mensagens via canal)
+  // Caso contrário, usar remoteJid
+  let remoteJid = payload.data.key.remoteJidAlt || payload.data.key.remoteJid;
+
   // Ignorar mensagens de canais/comunidades (@lid, @g.us, @broadcast)
-  const remoteJid = payload.data.key.remoteJid;
   if (remoteJid.includes('@lid') || remoteJid.includes('@g.us') || remoteJid.includes('@broadcast')) {
     return null;
   }
