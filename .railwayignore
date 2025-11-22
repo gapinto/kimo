@@ -1,0 +1,27 @@
+# Development files
+node_modules/
+.env.example
+.env.local
+
+# Testing
+tests/
+jest.config.js
+coverage/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+

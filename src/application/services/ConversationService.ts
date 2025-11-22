@@ -1,0 +1,854 @@
+import { IMessagingProvider } from '../../infrastructure/messaging/IMessagingProvider';
+import { IUserRepository } from '../../domain/repositories/IUserRepository';
+import { IDriverConfigRepository } from '../../domain/repositories/IDriverConfigRepository';
+import { IFixedCostRepository } from '../../domain/repositories/IFixedCostRepository';
+import { ITripRepository } from '../../domain/repositories/ITripRepository';
+import { IExpenseRepository } from '../../domain/repositories/IExpenseRepository';
+import { IDailySummaryRepository } from '../../domain/repositories/IDailySummaryRepository';
+import { CreateUser } from '../../domain/usecases/CreateUser';
+import { RegisterTrip } from '../../domain/usecases/RegisterTrip';
+import { RegisterExpense } from '../../domain/usecases/RegisterExpense';
+import { CalculateDailySummary } from '../../domain/usecases/CalculateDailySummary';
+import { CalculateBreakeven } from '../../domain/usecases/CalculateBreakeven';
+import { GetInsights } from '../../domain/usecases/GetInsights';
+import { DriverConfig } from '../../domain/entities/DriverConfig';
+import { FixedCost } from '../../domain/entities/FixedCost';
+import { Phone } from '../../domain/value-objects/Phone';
+import { Money } from '../../domain/value-objects/Money';
+import { DriverProfile, FixedCostType, CostFrequency, ExpenseType } from '../../domain/enums';
+import {
+  ConversationState,
+  ConversationSession,
+} from './ConversationTypes';
+import { logger } from '../../shared/utils/logger';
+
+/**
+ * ConversationService
+ * Gerencia fluxos de conversa no WhatsApp
+ * Princípio: Single Responsibility - apenas lógica de conversa
+ */
+export class ConversationService {
+  // Armazena sessões em memória (em produção, usar Redis)
+  private sessions: Map<string, ConversationSession> = new Map();
+
+  constructor(
+    private readonly messagingProvider: IMessagingProvider,
+    private readonly userRepository: IUserRepository,
+    private readonly driverConfigRepository: IDriverConfigRepository,
+    private readonly fixedCostRepository: IFixedCostRepository,
+    private readonly tripRepository: ITripRepository,
+    private readonly expenseRepository: IExpenseRepository,
+    private readonly dailySummaryRepository: IDailySummaryRepository
+  ) {}
+
+  /**
+   * Processa mensagem recebida
+   */
+  async processMessage(from: string, text: string): Promise<void> {
+    try {
+      logger.info('Processing message', { from, text });
+
+      // Buscar ou criar sessão
+      let session = this.getSession(from);
+      if (!session) {
+        session = this.createSession(from);
+      }
+
+      // Atualizar última interação
+      session.lastInteraction = new Date();
+
+      // Processar baseado no estado atual
+      switch (session.state) {
+        case ConversationState.IDLE:
+          await this.handleIdleState(session, text);
+          break;
+
+        case ConversationState.ONBOARDING_PROFILE:
+          await this.handleOnboardingProfile(session, text);
+          break;
+
+        case ConversationState.ONBOARDING_FUEL_CONSUMPTION:
+          await this.handleOnboardingFuelConsumption(session, text);
+          break;
+
+        case ConversationState.ONBOARDING_FUEL_PRICE:
+          await this.handleOnboardingFuelPrice(session, text);
+          break;
+
+        case ConversationState.ONBOARDING_AVG_KM:
+          await this.handleOnboardingAvgKm(session, text);
+          break;
+
+        case ConversationState.ONBOARDING_RENTAL:
+          await this.handleOnboardingRental(session, text);
+          break;
+
+        case ConversationState.ONBOARDING_CAR_VALUE:
+          await this.handleOnboardingCarValue(session, text);
+          break;
+
+        case ConversationState.REGISTER_EARNINGS:
+          await this.handleRegisterEarnings(session, text);
+          break;
+
+        case ConversationState.REGISTER_KM:
+          await this.handleRegisterKm(session, text);
+          break;
+
+        case ConversationState.REGISTER_FUEL:
+          await this.handleRegisterFuel(session, text);
+          break;
+
+        case ConversationState.REGISTER_OTHER_EXPENSES:
+          await this.handleRegisterOtherExpenses(session, text);
+          break;
+
+        case ConversationState.REGISTER_CONFIRM:
+          await this.handleRegisterConfirm(session, text);
+          break;
+
+        default:
+          await this.sendMessage(
+            from,
+            '❌ Desculpe, algo deu errado. Digite "oi" para recomeçar.'
+          );
+          this.resetSession(from);
+      }
+
+      // Salvar sessão atualizada
+      this.saveSession(session);
+    } catch (error) {
+      logger.error('Error processing message', error);
+      await this.sendMessage(
+        from,
+        '❌ Desculpe, ocorreu um erro. Digite "oi" para recomeçar.'
+      );
+    }
+  }
+
+  /**
+   * Estado IDLE - Primeira interação ou menu principal
+   */
+  private async handleIdleState(session: ConversationSession, text: string): Promise<void> {
+    const normalizedText = text.toLowerCase().trim();
+
+    // Verificar se usuário existe
+    const phone = Phone.create(session.phone);
+    const existingUser = await this.userRepository.findByPhone(phone);
+
+    if (!existingUser) {
+      // Novo usuário - iniciar onboarding
+      await this.startOnboarding(session);
+    } else {
+      // Usuário existente - mostrar menu
+      session.userId = existingUser.id;
+      
+      if (normalizedText.includes('registrar') || normalizedText === '1') {
+        await this.startRegistration(session);
+      } else if (normalizedText.includes('resumo') || normalizedText === '2') {
+        await this.showSummary(session);
+      } else if (normalizedText.includes('meta') || normalizedText === '3') {
+        await this.showWeeklyProgress(session);
+      } else if (normalizedText.includes('insights') || normalizedText === '4') {
+        await this.showInsights(session);
+      } else {
+        // Menu principal
+        await this.showMainMenu(session, existingUser.name);
+      }
+    }
+  }
+
+  /**
+   * Inicia processo de onboarding
+   */
+  private async startOnboarding(session: ConversationSession): Promise<void> {
+    const message = `👋 Olá! Sou o *KIMO*, seu assistente financeiro.
+
+Vou te fazer algumas perguntas rápidas para te ajudar melhor.
+
+*1️⃣ Você dirige com:*
+
+1 - Carro próprio quitado
+2 - Carro próprio financiado
+3 - Carro alugado (Localiza, Movida, Kovi)
+4 - Híbrido (uso pessoal + apps)
+
+Digite o número da sua opção:`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.ONBOARDING_PROFILE;
+  }
+
+  /**
+   * Processa escolha do perfil
+   */
+  private async handleOnboardingProfile(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const option = text.trim();
+
+    let profile: DriverProfile;
+    let profileName: string;
+
+    switch (option) {
+      case '1':
+        profile = DriverProfile.OWN_PAID;
+        profileName = 'Carro próprio quitado';
+        break;
+      case '2':
+        profile = DriverProfile.OWN_FINANCED;
+        profileName = 'Carro próprio financiado';
+        break;
+      case '3':
+        profile = DriverProfile.RENTED;
+        profileName = 'Carro alugado';
+        break;
+      case '4':
+        profile = DriverProfile.HYBRID;
+        profileName = 'Híbrido';
+        break;
+      default:
+        await this.sendMessage(
+          session.phone,
+          '❌ Opção inválida. Digite um número de 1 a 4:'
+        );
+        return;
+    }
+
+    session.data.profile = profile;
+    session.data.profileName = profileName;
+
+    // Próxima pergunta baseada no perfil
+    if (profile === DriverProfile.RENTED) {
+      await this.askRental(session);
+    } else {
+      await this.askCarValue(session);
+    }
+  }
+
+  /**
+   * Pergunta valor do aluguel
+   */
+  private async askRental(session: ConversationSession): Promise<void> {
+    const message = `✅ ${session.data.profileName}!
+
+*2️⃣ Quanto você paga de aluguel por semana?*
+
+Digite apenas o valor (ex: 900):`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.ONBOARDING_RENTAL;
+  }
+
+  /**
+   * Pergunta valor do carro
+   */
+  private async askCarValue(session: ConversationSession): Promise<void> {
+    const message = `✅ ${session.data.profileName}!
+
+*2️⃣ Qual o valor aproximado do seu carro?*
+
+Digite apenas o valor (ex: 50000):`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.ONBOARDING_CAR_VALUE;
+  }
+
+  private async handleOnboardingRental(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const rental = this.parseNumber(text);
+
+    if (!rental || rental <= 0) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite apenas números (ex: 900):'
+      );
+      return;
+    }
+
+    session.data.rental = rental;
+
+    await this.askFuelConsumption(session);
+  }
+
+  private async handleOnboardingCarValue(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const carValue = this.parseNumber(text);
+
+    if (!carValue || carValue <= 0) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite apenas números (ex: 50000):'
+      );
+      return;
+    }
+
+    session.data.carValue = carValue;
+
+    // Se tiver financiamento, perguntar valor da parcela
+    if (session.data.profile === DriverProfile.OWN_FINANCED) {
+      const message = `✅ R$ ${carValue.toLocaleString('pt-BR')}
+
+*3️⃣ Quanto é a parcela do financiamento por mês?*
+
+Digite apenas o valor (ex: 800):`;
+
+      await this.sendMessage(session.phone, message);
+      // Próximo estado seria ONBOARDING_FINANCING (adicionar depois)
+    }
+
+    await this.askFuelConsumption(session);
+  }
+
+  private async askFuelConsumption(session: ConversationSession): Promise<void> {
+    const message = `✅ Anotado!
+
+*Quantos km/litro seu carro faz?*
+
+Digite apenas o número (ex: 12):`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.ONBOARDING_FUEL_CONSUMPTION;
+  }
+
+  private async handleOnboardingFuelConsumption(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const fuelConsumption = this.parseNumber(text);
+
+    if (!fuelConsumption || fuelConsumption <= 0 || fuelConsumption > 30) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite um número entre 1 e 30 (ex: 12):'
+      );
+      return;
+    }
+
+    session.data.fuelConsumption = fuelConsumption;
+
+    const message = `✅ ${fuelConsumption} km/litro
+
+*Quanto custa o litro de gasolina na sua região?*
+
+Digite apenas o valor (ex: 5.50):`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.ONBOARDING_FUEL_PRICE;
+  }
+
+  private async handleOnboardingFuelPrice(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const fuelPrice = this.parseNumber(text);
+
+    if (!fuelPrice || fuelPrice <= 0) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite apenas números (ex: 5.50):'
+      );
+      return;
+    }
+
+    session.data.fuelPrice = fuelPrice;
+
+    const message = `✅ R$ ${fuelPrice.toFixed(2)}/litro
+
+*Quantos KM você roda em média por dia?*
+
+Digite apenas o número (ex: 150):`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.ONBOARDING_AVG_KM;
+  }
+
+  private async handleOnboardingAvgKm(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const avgKm = this.parseNumber(text);
+
+    if (!avgKm || avgKm <= 0) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite apenas números (ex: 150):'
+      );
+      return;
+    }
+
+    session.data.avgKm = avgKm;
+
+    // Finalizar onboarding
+    await this.completeOnboarding(session);
+  }
+
+  private async completeOnboarding(session: ConversationSession): Promise<void> {
+    try {
+      // 1. Criar usuário
+      const createUser = new CreateUser(this.userRepository);
+      const userResult = await createUser.execute({
+        phone: session.phone,
+      });
+
+      session.userId = userResult.userId;
+
+      // 2. Criar configuração do motorista
+      const config = DriverConfig.create({
+        userId: userResult.userId,
+        profile: session.data.profile as DriverProfile,
+        carValue: session.data.carValue ? Money.create(session.data.carValue as number) : undefined,
+        fuelConsumption: session.data.fuelConsumption as number,
+        avgFuelPrice: Money.create(session.data.fuelPrice as number),
+        avgKmPerDay: session.data.avgKm as number,
+        workDaysPerWeek: 6,
+      });
+
+      await this.driverConfigRepository.save(config);
+
+      // 3. Se tiver aluguel, criar custo fixo
+      if (session.data.rental) {
+        const rental = FixedCost.create({
+          userId: userResult.userId,
+          type: FixedCostType.RENTAL,
+          amount: Money.create(session.data.rental as number),
+          frequency: CostFrequency.WEEKLY,
+          description: 'Aluguel do carro',
+        });
+
+        await this.fixedCostRepository.save(rental);
+      }
+
+      logger.info('Onboarding completed', { userId: userResult.userId });
+
+      // 4. Mensagem de sucesso
+      const fuelCost = this.calculateFuelCost(session);
+      const message = `🎉 *Pronto! Perfil configurado.*
+
+📊 Seu custo estimado de combustível: *R$ ${fuelCost.toFixed(2)}/dia*
+
+Comandos disponíveis:
+1️⃣ *Registrar dia* - Registrar ganhos e despesas
+2️⃣ *Resumo* - Ver resumo de hoje
+3️⃣ *Meta* - Ver progresso semanal
+4️⃣ *Insights* - Dicas personalizadas
+
+Digite o número ou o nome do comando!`;
+
+      await this.sendMessage(session.phone, message);
+      session.state = ConversationState.IDLE;
+    } catch (error) {
+      logger.error('Error completing onboarding', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao salvar configurações. Digite "oi" para tentar novamente.'
+      );
+      this.resetSession(session.phone);
+    }
+  }
+
+  // Métodos auxiliares
+  private async startRegistration(session: ConversationSession): Promise<void> {
+    const message = `📝 *Vamos registrar seu dia!*
+
+*Quanto você ganhou hoje?*
+
+Digite apenas o valor em reais (ex: 280):`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.REGISTER_EARNINGS;
+    session.data.registration = {};
+  }
+
+  private async showSummary(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const getInsights = new GetInsights(
+        this.driverConfigRepository,
+        this.fixedCostRepository,
+        this.tripRepository,
+        this.expenseRepository
+      );
+
+      const result = await getInsights.execute({
+        userId: session.userId,
+        date: new Date(),
+      });
+
+      let message = `📊 *RESUMO DE HOJE*\n\n`;
+
+      // Insights
+      if (result.insights.length > 0) {
+        message += `💡 *Insights:*\n`;
+        result.insights.forEach((insight) => {
+          message += `${insight}\n`;
+        });
+        message += '\n';
+      }
+
+      // Warnings
+      if (result.warnings.length > 0) {
+        message += `⚠️ *Atenção:*\n`;
+        result.warnings.forEach((warning) => {
+          message += `${warning}\n`;
+        });
+        message += '\n';
+      }
+
+      // Tips
+      if (result.tips.length > 0) {
+        message += `💰 *Dicas:*\n`;
+        result.tips.forEach((tip) => {
+          message += `${tip}\n`;
+        });
+      }
+
+      if (result.insights.length === 0 && result.warnings.length === 0) {
+        message += `Ainda não há dados suficientes para gerar insights.\n\nRegistre seu dia primeiro! Digite "1" ou "registrar dia".`;
+      }
+
+      await this.sendMessage(session.phone, message);
+    } catch (error) {
+      logger.error('Error showing summary', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao buscar resumo. Tente novamente mais tarde.'
+      );
+    }
+  }
+
+  private async showWeeklyProgress(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const calculateBreakeven = new CalculateBreakeven(
+        this.driverConfigRepository,
+        this.fixedCostRepository,
+        this.dailySummaryRepository
+      );
+
+      const result = await calculateBreakeven.execute({
+        userId: session.userId,
+        referenceDate: new Date(),
+      });
+
+      const message = `🎯 *META SEMANAL*
+
+💰 *Ganhos:* R$ ${result.weeklyEarnings.toFixed(2)}
+💸 *Custos Fixos:* R$ ${result.weeklyFixedCosts.toFixed(2)}
+⛽ *Custos Variáveis:* R$ ${result.weeklyVariableCosts.toFixed(2)}
+━━━━━━━━━━━━━━━━
+📊 *Total Custos:* R$ ${result.weeklyTotalCosts.toFixed(2)}
+✅ *Lucro:* R$ ${result.weeklyProfit.toFixed(2)}
+
+${result.message}`;
+
+      await this.sendMessage(session.phone, message);
+    } catch (error) {
+      logger.error('Error showing weekly progress', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao calcular meta. Certifique-se de ter registrado alguns dias.'
+      );
+    }
+  }
+
+  private async showInsights(session: ConversationSession): Promise<void> {
+    // Mesmo que showSummary
+    await this.showSummary(session);
+  }
+
+  private async showMainMenu(session: ConversationSession, name?: string): Promise<void> {
+    const greeting = name ? `Olá, ${name}!` : 'Olá!';
+    
+    const message = `👋 ${greeting}
+
+Comandos disponíveis:
+1️⃣ *Registrar dia*
+2️⃣ *Resumo*
+3️⃣ *Meta*
+4️⃣ *Insights*
+
+Digite o número ou o nome do comando:`;
+
+    await this.sendMessage(session.phone, message);
+  }
+
+  private calculateFuelCost(session: ConversationSession): number {
+    const fuelConsumption = session.data.fuelConsumption as number;
+    const fuelPrice = session.data.fuelPrice as number;
+    const avgKm = session.data.avgKm as number;
+
+    const litersPerDay = avgKm / fuelConsumption;
+    return litersPerDay * fuelPrice;
+  }
+
+  // Handlers de registro
+  private async handleRegisterEarnings(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const earnings = this.parseNumber(text);
+
+    if (!earnings || earnings < 0) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite apenas o valor em reais (ex: 280):'
+      );
+      return;
+    }
+
+    session.data.registration = { ...session.data.registration, earnings };
+
+    const message = `✅ R$ ${earnings.toFixed(2)} de ganhos
+
+*Quantos KM você rodou hoje?*
+
+Digite apenas o número (ex: 150):`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.REGISTER_KM;
+  }
+
+  private async handleRegisterKm(session: ConversationSession, text: string): Promise<void> {
+    const km = this.parseNumber(text);
+
+    if (!km || km < 0) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite apenas o número de KM (ex: 150):'
+      );
+      return;
+    }
+
+    session.data.registration = { ...session.data.registration, km };
+
+    const message = `✅ ${km} km rodados
+
+*Quanto gastou com combustível?*
+
+Digite apenas o valor (ex: 70):`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.REGISTER_FUEL;
+  }
+
+  private async handleRegisterFuel(session: ConversationSession, text: string): Promise<void> {
+    const fuel = this.parseNumber(text);
+
+    if (!fuel || fuel < 0) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite apenas o valor (ex: 70):'
+      );
+      return;
+    }
+
+    session.data.registration = { ...session.data.registration, fuel };
+
+    const message = `✅ R$ ${fuel.toFixed(2)} de combustível
+
+*Teve outras despesas?*
+(pedágio, estacionamento, lavagem)
+
+Digite o valor total ou "0" se não teve:`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.REGISTER_OTHER_EXPENSES;
+  }
+
+  private async handleRegisterOtherExpenses(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const otherExpenses = this.parseNumber(text);
+
+    if (otherExpenses === null || otherExpenses < 0) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite o valor ou "0":'
+      );
+      return;
+    }
+
+    session.data.registration = { ...session.data.registration, otherExpenses };
+
+    // Calcular lucro
+    const reg = session.data.registration as any;
+    const profit = reg.earnings - reg.fuel - otherExpenses;
+
+    const message = `📊 *RESUMO DO DIA:*
+
+💰 Ganhos: R$ ${reg.earnings.toFixed(2)}
+⛽ Combustível: R$ ${reg.fuel.toFixed(2)}
+${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` : ''}━━━━━━━━━━━━━━━━
+✅ Lucro: R$ ${profit.toFixed(2)}
+
+*Confirmar?*
+
+1 - Sim, salvar
+2 - Não, cancelar`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.REGISTER_CONFIRM;
+  }
+
+  private async handleRegisterConfirm(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const option = text.trim();
+
+    if (option === '2' || text.toLowerCase().includes('não') || text.toLowerCase().includes('nao')) {
+      await this.sendMessage(session.phone, '❌ Registro cancelado.');
+      session.state = ConversationState.IDLE;
+      session.data.registration = {};
+      return;
+    }
+
+    if (option !== '1' && !text.toLowerCase().includes('sim')) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Opção inválida. Digite 1 para confirmar ou 2 para cancelar:'
+      );
+      return;
+    }
+
+    // Salvar dados
+    try {
+      if (!session.userId) {
+        throw new Error('User ID not found');
+      }
+
+      const reg = session.data.registration as any;
+      const today = new Date();
+
+      // 1. Registrar Trip
+      const registerTrip = new RegisterTrip(this.tripRepository);
+      await registerTrip.execute({
+        userId: session.userId,
+        date: today,
+        earnings: reg.earnings,
+        km: reg.km,
+        timeOnlineMinutes: 0, // Pode adicionar pergunta depois
+      });
+
+      // 2. Registrar Combustível
+      const registerFuelExpense = new RegisterExpense(this.expenseRepository);
+      await registerFuelExpense.execute({
+        userId: session.userId,
+        date: today,
+        type: ExpenseType.FUEL,
+        amount: reg.fuel,
+      });
+
+      // 3. Registrar outras despesas (se tiver)
+      if (reg.otherExpenses > 0) {
+        await registerFuelExpense.execute({
+          userId: session.userId,
+          date: today,
+          type: ExpenseType.OTHER,
+          amount: reg.otherExpenses,
+        });
+      }
+
+      // 4. Calcular resumo diário
+      const calculateSummary = new CalculateDailySummary(
+        this.tripRepository,
+        this.expenseRepository,
+        this.dailySummaryRepository
+      );
+
+      const summary = await calculateSummary.execute({
+        userId: session.userId,
+        date: today,
+      });
+
+      logger.info('Day registered successfully', { userId: session.userId });
+
+      // 5. Buscar insights
+      const getInsights = new GetInsights(
+        this.driverConfigRepository,
+        this.fixedCostRepository,
+        this.tripRepository,
+        this.expenseRepository
+      );
+
+      const insights = await getInsights.execute({
+        userId: session.userId,
+        date: today,
+      });
+
+      // 6. Mensagem de sucesso com insights
+      let message = `✅ *Dia registrado com sucesso!*\n\n`;
+
+      message += `📊 *Lucro líquido:* R$ ${summary.profit.toFixed(2)}\n`;
+      message += `📈 *Custo por KM:* R$ ${summary.costPerKm?.toFixed(2) || '0.00'}\n\n`;
+
+      if (insights.insights.length > 0) {
+        message += `💡 *Insight do dia:*\n${insights.insights[0]}\n\n`;
+      }
+
+      message += `Digite "meta" para ver seu progresso semanal!`;
+
+      await this.sendMessage(session.phone, message);
+
+      session.state = ConversationState.IDLE;
+      session.data.registration = {};
+    } catch (error) {
+      logger.error('Error saving registration', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao salvar. Tente novamente mais tarde.'
+      );
+      session.state = ConversationState.IDLE;
+    }
+  }
+
+  // Métodos auxiliares
+  private parseNumber(text: string): number | null {
+    const cleaned = text.replace(/[^\d.,]/g, '').replace(',', '.');
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? null : parsed;
+  }
+
+  private async sendMessage(to: string, message: string): Promise<void> {
+    await this.messagingProvider.sendTextMessage({ to, message });
+  }
+
+  private getSession(phone: string): ConversationSession | undefined {
+    return this.sessions.get(phone);
+  }
+
+  private createSession(phone: string): ConversationSession {
+    const session: ConversationSession = {
+      phone,
+      state: ConversationState.IDLE,
+      data: {},
+      lastInteraction: new Date(),
+    };
+    this.sessions.set(phone, session);
+    return session;
+  }
+
+  private saveSession(session: ConversationSession): void {
+    this.sessions.set(session.phone, session);
+  }
+
+  private resetSession(phone: string): void {
+    this.sessions.delete(phone);
+  }
+}
+
