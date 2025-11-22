@@ -1,15 +1,15 @@
 import { Router } from 'express';
-import { WhatsAppWebhookController } from '../../application/controllers/WhatsAppWebhookController';
-import { ConversationService } from '../../application/services/ConversationService';
-import { EvolutionAPIProvider } from '../../infrastructure/messaging/EvolutionAPIProvider';
-import { SupabaseUserRepository } from '../../infrastructure/database/repositories/SupabaseUserRepository';
-import { SupabaseDriverConfigRepository } from '../../infrastructure/database/repositories/SupabaseDriverConfigRepository';
-import { SupabaseFixedCostRepository } from '../../infrastructure/database/repositories/SupabaseFixedCostRepository';
-import { SupabaseTripRepository } from '../../infrastructure/database/repositories/SupabaseTripRepository';
-import { SupabaseExpenseRepository } from '../../infrastructure/database/repositories/SupabaseExpenseRepository';
-import { SupabaseDailySummaryRepository } from '../../infrastructure/database/repositories/SupabaseDailySummaryRepository';
-import { getSupabaseClient } from '../../infrastructure/database/supabase.client';
-import { env } from '../../shared/utils/env';
+import { WhatsAppWebhookController } from '../../../application/controllers/WhatsAppWebhookController';
+import { ConversationService } from '../../../application/services/ConversationService';
+import { EvolutionAPIProvider } from '../../messaging/EvolutionAPIProvider';
+import { SupabaseUserRepository } from '../../database/repositories/SupabaseUserRepository';
+import { SupabaseDriverConfigRepository } from '../../database/repositories/SupabaseDriverConfigRepository';
+import { SupabaseFixedCostRepository } from '../../database/repositories/SupabaseFixedCostRepository';
+import { SupabaseTripRepository } from '../../database/repositories/SupabaseTripRepository';
+import { SupabaseExpenseRepository } from '../../database/repositories/SupabaseExpenseRepository';
+import { SupabaseDailySummaryRepository } from '../../database/repositories/SupabaseDailySummaryRepository';
+import { getSupabaseClient } from '../../database/supabase.client';
+import { env } from '../../../shared/utils/env';
 
 /**
  * Rotas do Webhook WhatsApp
