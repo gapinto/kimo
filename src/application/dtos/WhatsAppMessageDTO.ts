@@ -47,8 +47,18 @@ export function parseEvolutionAPIWebhook(
     return null;
   }
 
-  // Extrair número do remetente
-  const from = payload.data.key.remoteJid.replace('@s.whatsapp.net', '');
+  // Ignorar mensagens de canais/comunidades (@lid, @g.us, @broadcast)
+  const remoteJid = payload.data.key.remoteJid;
+  if (remoteJid.includes('@lid') || remoteJid.includes('@g.us') || remoteJid.includes('@broadcast')) {
+    return null;
+  }
+
+  // Extrair número do remetente (apenas números individuais @s.whatsapp.net)
+  if (!remoteJid.includes('@s.whatsapp.net')) {
+    return null;
+  }
+
+  const from = remoteJid.replace('@s.whatsapp.net', '');
 
   // Extrair texto da mensagem
   let text: string | undefined;
