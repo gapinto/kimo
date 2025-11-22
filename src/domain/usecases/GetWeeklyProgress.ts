@@ -80,10 +80,10 @@ export class GetWeeklyProgress {
       daysWithData: summaries.length,
       dailySummaries: summaries.map((summary) => ({
         date: summary.date.toISOString().split('T')[0],
-        earnings: summary.totalEarnings.getValue(),
-        expenses: summary.totalExpenses.getValue(),
-        profit: summary.profit.getValue(),
-        km: summary.totalDistance.getValue(),
+        earnings: summary.earnings.value,
+        expenses: summary.expenses.value,
+        profit: summary.profit.value,
+        km: summary.km.value,
       })),
     };
   }
