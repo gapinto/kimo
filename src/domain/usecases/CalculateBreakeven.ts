@@ -47,7 +47,8 @@ export class CalculateBreakeven {
       throw new Error('Reference date is required');
     }
 
-    const referenceDate = input.referenceDate || input.date!;
+    // Use referenceDate or date
+    const _referenceDate = input.referenceDate || input.date!;
 
     // Buscar config do motorista
     const config = await this.driverConfigRepo.findByUserId(input.userId);

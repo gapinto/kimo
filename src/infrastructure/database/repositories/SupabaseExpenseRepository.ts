@@ -202,7 +202,7 @@ export class SupabaseExpenseRepository implements IExpenseRepository {
   // Helpers privados
   private toDomain(row: ExpenseRow): Expense {
     return Expense.restore({
-      id: row.id || '',
+      id: row.id ?? crypto.randomUUID(),
       userId: row.user_id,
       date: new Date(row.date),
       type: row.type as ExpenseType,

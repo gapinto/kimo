@@ -189,7 +189,7 @@ export class SupabaseFixedCostRepository implements IFixedCostRepository {
   // Conversores privados
   private toDomain(row: FixedCostRow): FixedCost {
     return FixedCost.restore({
-      id: row.id || '',
+      id: row.id ?? crypto.randomUUID(),
       userId: row.user_id,
       type: row.type as FixedCostType,
       amount: Money.create(row.amount),

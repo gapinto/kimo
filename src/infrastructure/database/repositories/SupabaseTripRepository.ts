@@ -173,7 +173,7 @@ export class SupabaseTripRepository implements ITripRepository {
   // Helpers privados
   private toDomain(row: TripRow): Trip {
     return Trip.restore({
-      id: row.id || '',
+      id: row.id ?? crypto.randomUUID(),
       userId: row.user_id,
       date: new Date(row.date),
       earnings: Money.create(row.earnings),
