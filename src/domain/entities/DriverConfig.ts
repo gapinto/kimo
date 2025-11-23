@@ -137,6 +137,14 @@ export class DriverConfig {
     this.props.updatedAt = new Date();
   }
 
+  public updateFuelPrice(pricePerLiter: number): void {
+    if (pricePerLiter <= 0) {
+      throw new Error('Fuel price must be positive');
+    }
+    this.props.avgFuelPrice = Money.create(pricePerLiter);
+    this.props.updatedAt = new Date();
+  }
+
   /**
    * Calcula custo de combustível por KM
    */

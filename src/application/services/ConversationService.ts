@@ -428,6 +428,9 @@ export class ConversationService {
         await this.sendExpensesPieChart(session);
       } else if (normalizedText === 'g4' || normalizedText === 'grafico meta') {
         await this.sendGoalProgressChart(session);
+      } else if (normalizedText.match(/^preco\s+(\d+(?:[.,]\d+)?)$/)) {
+        // Comando para atualizar preço da gasolina: "preco 5.80"
+        await this.updateFuelPrice(session, normalizedText);
       } else {
         // Menu principal
         await this.showMainMenu(session, existingUser.name);
@@ -848,10 +851,37 @@ Digite o número ou o nome do comando!`;
           return;
       }
 
+      // Para combustível, calcular litros e mostrar preço por litro
+      let fuelInfo: { liters: number; pricePerLiter: number } | undefined;
+      
+      if (typeCode === 'g') {
+        try {
+          const driverConfig = await this.driverConfigRepository.findByUserId(session.userId);
+          
+          if (driverConfig && driverConfig.avgFuelPrice.value > 0) {
+            // Calcular litros baseado no preço cadastrado
+            const liters = amount / driverConfig.avgFuelPrice.value;
+            
+            fuelInfo = {
+              liters,
+              pricePerLiter: driverConfig.avgFuelPrice.value,
+            };
+          }
+        } catch (error) {
+          logger.error('Error fetching driver config for fuel calculation', error);
+        }
+      }
+
       // Montar mensagem de confirmação
       let confirmMessage = `✅ *Confirme a despesa:*\n\n`;
       confirmMessage += `📋 Tipo: ${typeName}\n`;
       confirmMessage += `💸 Valor: R$ ${amount.toFixed(2)}\n`;
+      
+      // Se for combustível, mostrar detalhes
+      if (fuelInfo) {
+        confirmMessage += `⛽ Litros: ${fuelInfo.liters.toFixed(2)}L\n`;
+        confirmMessage += `📊 Preço/L: R$ ${fuelInfo.pricePerLiter.toFixed(2)}\n`;
+      }
       
       if (description) {
         confirmMessage += `📝 Descrição: ${description}\n`;
@@ -868,6 +898,7 @@ Digite o número ou o nome do comando!`;
         typeName,
         amount,
         description,
+        fuelInfo,
       };
 
       session.state = ConversationState.REGISTER_CONFIRM;
@@ -1417,7 +1448,7 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
         throw new Error('User ID not found');
       }
 
-      const { type, typeName, amount, description } = data;
+      const { type, typeName, amount, description, fuelInfo } = data;
 
       // Registrar despesa
       const registerExpense = new RegisterExpense(this.expenseRepository);
@@ -1432,6 +1463,14 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
       let message = `✅ *Despesa salva!*\n\n`;
       message += `📋 ${typeName}\n`;
       message += `💸 R$ ${amount.toFixed(2)}`;
+      
+      if (fuelInfo) {
+        message += `\n⛽ ${fuelInfo.liters.toFixed(2)}L a R$ ${fuelInfo.pricePerLiter.toFixed(2)}/L`;
+        
+        // Sugerir atualização de preço
+        message += `\n\n💡 *Dica:* Se o preço mudou, atualize:`;
+        message += `\n• Digite: \`preco 5.80\` (novo preço/litro)`;
+      }
       
       if (description) {
         message += `\n📝 ${description}`;
@@ -2008,6 +2047,85 @@ Digite o código ou comando:`;
           '❌ Erro ao avaliar corrida. Tente novamente.'
         );
       }
+    }
+  }
+
+  // ============================================
+  // ATUALIZAÇÃO DE PREÇO DE COMBUSTÍVEL
+  // ============================================
+
+  /**
+   * Atualiza o preço da gasolina do motorista
+   */
+  private async updateFuelPrice(session: ConversationSession, text: string): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      // Extrair preço
+      const match = text.match(/^preco\s+(\d+(?:[.,]\d+)?)$/);
+      
+      if (!match) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Formato inválido. Use: `preco 5.80`'
+        );
+        return;
+      }
+
+      const newPrice = parseFloat(match[1].replace(',', '.'));
+
+      if (isNaN(newPrice) || newPrice <= 0 || newPrice > 20) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Preço inválido. Digite um valor entre R$ 0,01 e R$ 20,00'
+        );
+        return;
+      }
+
+      // Buscar configuração atual
+      const driverConfig = await this.driverConfigRepository.findByUserId(session.userId);
+
+      if (!driverConfig) {
+        await this.sendMessage(
+          session.phone,
+          '⚠️ Complete o cadastro primeiro!'
+        );
+        return;
+      }
+
+      const oldPrice = driverConfig.avgFuelPrice.value;
+
+      // Atualizar preço
+      driverConfig.updateFuelPrice(newPrice);
+      await this.driverConfigRepository.update(driverConfig);
+
+      let message = `✅ *Preço da gasolina atualizado!*\n\n`;
+      message += `🔄 Antes: R$ ${oldPrice.toFixed(2)}/L\n`;
+      message += `⛽ Agora: R$ ${newPrice.toFixed(2)}/L\n\n`;
+
+      const diff = newPrice - oldPrice;
+      if (diff > 0) {
+        message += `📈 Aumento de R$ ${diff.toFixed(2)}/L (${((diff / oldPrice) * 100).toFixed(1)}%)`;
+      } else {
+        message += `📉 Redução de R$ ${Math.abs(diff).toFixed(2)}/L (${((Math.abs(diff) / oldPrice) * 100).toFixed(1)}%)`;
+      }
+
+      await this.sendMessage(session.phone, message);
+
+      logger.info('Fuel price updated', {
+        userId: session.userId,
+        oldPrice,
+        newPrice,
+      });
+    } catch (error) {
+      logger.error('Error updating fuel price', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao atualizar preço. Tente novamente.'
+      );
     }
   }
 }
