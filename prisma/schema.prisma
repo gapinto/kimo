@@ -1,0 +1,135 @@
+// Prisma Schema para KIMO
+// Documentação: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// TABELA: users
+// ============================================
+model User {
+  id                   String           @id @default(uuid())
+  phone                String           @unique
+  name                 String?
+  weeklyGoal           Decimal?         @map("weekly_goal") @db.Decimal(10, 2)
+  profile              String?          // DriverProfile enum
+  subscriptionPlan     String           @default("free") @map("subscription_plan") // SubscriptionPlan enum
+  subscriptionExpiresAt DateTime?       @map("subscription_expires_at")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+  
+  // Relações
+  trips                Trip[]
+  expenses             Expense[]
+  dailySummaries       DailySummary[]   @relation("UserDailySummaries")
+  fixedCosts           FixedCost[]
+  driverConfig         DriverConfig?
+
+  @@map("users")
+}
+
+// ============================================
+// TABELA: driver_configs
+// ============================================
+model DriverConfig {
+  id                   String    @id @default(uuid())
+  userId               String    @unique @map("user_id")
+  fuelConsumption      Decimal   @map("fuel_consumption") @db.Decimal(5, 2) // km/l
+  fuelPrice            Decimal   @map("fuel_price") @db.Decimal(10, 2)
+  avgKmPerDay          Decimal?  @map("avg_km_per_day") @db.Decimal(10, 2)
+  carValue             Decimal?  @map("car_value") @db.Decimal(10, 2)
+  carPurchaseDate      DateTime? @map("car_purchase_date")
+  rentalDailyValue     Decimal?  @map("rental_daily_value") @db.Decimal(10, 2)
+  personalUsePercentage Decimal? @map("personal_use_percentage") @db.Decimal(5, 2)
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("driver_configs")
+}
+
+// ============================================
+// TABELA: trips
+// ============================================
+model Trip {
+  id                  String    @id @default(uuid())
+  userId              String    @map("user_id")
+  date                DateTime  @db.Date
+  earnings            Decimal   @db.Decimal(10, 2)
+  km                  Decimal   @db.Decimal(10, 2)
+  timeOnlineMinutes   Int?      @map("time_online_minutes")
+  isPersonalUse       Boolean   @default(false) @map("is_personal_use")
+  note                String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("trips")
+  @@index([userId, date])
+}
+
+// ============================================
+// TABELA: expenses
+// ============================================
+model Expense {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  date      DateTime  @db.Date
+  type      String    // ExpenseType enum
+  amount    Decimal   @db.Decimal(10, 2)
+  note      String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("expenses")
+  @@index([userId, date])
+}
+
+// ============================================
+// TABELA: fixed_costs
+// ============================================
+model FixedCost {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  type        String    // FixedCostType enum
+  amount      Decimal   @db.Decimal(10, 2)
+  frequency   String    // CostFrequency enum
+  description String?
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("fixed_costs")
+}
+
+// ============================================
+// TABELA: daily_summaries
+// ============================================
+model DailySummary {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  date       DateTime  @unique @db.Date
+  earnings   Decimal   @db.Decimal(10, 2)
+  expenses   Decimal   @db.Decimal(10, 2)
+  profit     Decimal   @db.Decimal(10, 2)
+  km         Decimal   @db.Decimal(10, 2)
+  costPerKm  Decimal?  @map("cost_per_km") @db.Decimal(10, 2)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  
+  user       User      @relation("UserDailySummaries", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("daily_summaries")
+  @@index([userId, date])
+}
+
