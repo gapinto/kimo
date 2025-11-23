@@ -21,6 +21,7 @@ export class PrismaUserRepository implements IUserRepository {
           name: user.name,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
+          // subscriptionPlan não existe no banco ainda
         },
       });
     } catch (error) {
@@ -40,7 +41,7 @@ export class PrismaUserRepository implements IUserRepository {
         id: row.id,
         phone: Phone.create(row.phone),
         name: row.name ?? undefined,
-        subscriptionPlan: SubscriptionPlan.FREE,
+        subscriptionPlan: SubscriptionPlan.FREE, // Valor padrão
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       });
@@ -61,7 +62,7 @@ export class PrismaUserRepository implements IUserRepository {
         id: row.id,
         phone: Phone.create(row.phone),
         name: row.name ?? undefined,
-        subscriptionPlan: SubscriptionPlan.FREE,
+        subscriptionPlan: SubscriptionPlan.FREE, // Valor padrão
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       });
@@ -78,7 +79,7 @@ export class PrismaUserRepository implements IUserRepository {
         id: row.id,
         phone: Phone.create(row.phone),
         name: row.name ?? undefined,
-        subscriptionPlan: SubscriptionPlan.FREE,
+        subscriptionPlan: SubscriptionPlan.FREE, // Valor padrão
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       }));
@@ -95,6 +96,7 @@ export class PrismaUserRepository implements IUserRepository {
           phone: user.phone.value,
           name: user.name,
           updatedAt: user.updatedAt,
+          // subscriptionPlan não existe no banco ainda
         },
       });
     } catch (error) {
@@ -124,3 +126,4 @@ export class PrismaUserRepository implements IUserRepository {
     }
   }
 }
+
