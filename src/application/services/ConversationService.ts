@@ -1035,9 +1035,10 @@ Digite apenas o número (ex: 12):`;
       const registerTrip = new RegisterTrip(this.tripRepository);
       await registerTrip.execute({
         userId: session.userId,
-        earnings: Money.create(reg.earnings),
+        earnings: reg.earnings, // já é number
         km: reg.km,
         date: new Date(),
+        timeOnlineMinutes: 0,
       });
 
       logger.info('Trip registered successfully', {
@@ -1196,9 +1197,10 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
       const registerTrip = new RegisterTrip(this.tripRepository);
       await registerTrip.execute({
         userId: session.userId,
-        earnings: Money.create(earnings),
+        earnings, // já é number
         km,
         date: new Date(),
+        timeOnlineMinutes: 0,
       });
 
       let message = `✅ *Corrida salva!*\n\n💰 R$ ${earnings.toFixed(2)}\n🚗 ${km} km`;
@@ -1208,7 +1210,7 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
         const registerExpense = new RegisterExpense(this.expenseRepository);
         await registerExpense.execute({
           userId: session.userId,
-          amount: Money.create(fuel),
+          amount: fuel, // já é number
           type: ExpenseType.FUEL,
           date: new Date(),
         });
@@ -1250,9 +1252,9 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
       const registerExpense = new RegisterExpense(this.expenseRepository);
       await registerExpense.execute({
         userId: session.userId,
-        amount: Money.create(amount),
+        amount, // já é number
         type,
-        description,
+        note: description,
         date: new Date(),
       });
 
