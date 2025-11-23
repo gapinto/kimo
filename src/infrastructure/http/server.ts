@@ -3,9 +3,9 @@ import { AppError } from '../../shared/errors/AppError';
 import { logger } from '../../shared/utils/logger';
 import { createWhatsAppRoutes } from './routes/whatsapp.routes';
 import { SchedulerService } from '../../application/services/SchedulerService';
-import { prisma } from '../database/prisma';
-import { PrismaUserRepository } from '../database/repositories/PrismaUserRepository';
-import { PrismaDailySummaryRepository } from '../database/repositories/PrismaDailySummaryRepository';
+import { supabase } from '../database/supabase';
+import { SupabaseUserRepository } from '../database/repositories/SupabaseUserRepository';
+import { SupabaseDailySummaryRepository } from '../database/repositories/SupabaseDailySummaryRepository';
 import { EvolutionAPIProvider } from '../messaging/EvolutionAPIProvider';
 import { env } from '../../shared/utils/env';
 
@@ -77,8 +77,8 @@ export function createServer(): Express {
 export function initializeScheduler(): void {
   logger.info('Initializing scheduler...');
   
-  const userRepository = new PrismaUserRepository(prisma);
-  const dailySummaryRepository = new PrismaDailySummaryRepository(prisma);
+  const userRepository = new SupabaseUserRepository(supabase);
+  const dailySummaryRepository = new SupabaseDailySummaryRepository(supabase);
   
   const messagingProvider = new EvolutionAPIProvider({
     apiUrl: env.whatsapp.evolutionApiUrl,

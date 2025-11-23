@@ -1,53 +1,5 @@
 # 📱 MENSAGENS DO BOT KIMO - REVISÃO
 
-## 🆕 **NOVIDADES - DEPRECIAÇÃO**
-
-### **Comando: "info" ou "deprec"**
-```
-📉 *DEPRECIAÇÃO DO SEU CARRO*
-
-🚗 *Valor atual:* R$ 45.000,00
-
-📊 *Como seu carro perde valor:*
-
-📅 Por ANO: R$ 8.100,00 _(18% do valor)_
-📆 Por MÊS: R$ 675,00
-📍 Por SEMANA: R$ 155,89
-📌 Por DIA: R$ 25,98
-
-💡 *O que isso significa?*
-Todo dia que você trabalha, seu carro perde ~R$ 26 em valor de revenda.
-
-*Por isso é importante:*
-✅ Incluir isso no custo por corrida
-✅ Fazer meta de lucro suficiente
-✅ Manutenção preventiva (vale a pena!)
-
-🔄 *Projeção (5 anos):*
-Valor hoje: R$ 45.000,00
-Valor estimado: R$ 19.685,27 _(-56%)_
-
-💰 *Dica KIMO:*
-Reserve parte do lucro mensal para trocar o carro no futuro!
-
-━━━━━━━━━━━━━━━━
-💬 Digite *oi* para voltar ao menu
-```
-
-### **No Onboarding - Breakdown de Custos:**
-```
-💰 *Breakdown de Custos (por dia):*
-⛽ Combustível: R$ 47,50
-🔧 Manutenção: R$ 10,00
-📉 Depreciação: R$ 25,98
-   _(seu carro perde ~R$ 675/mês)_
-📌 Custos fixos: R$ 42,80
-━━━━━━━━━━━━━━
-💸 *Total/dia: R$ 126,28*
-```
-
----
-
 ## 🎯 **MENSAGENS PRINCIPAIS DO FLUXO**
 
 ---
@@ -225,7 +177,6 @@ Digite apenas o número (ex: 150):
 • *r* → Resumo do dia
 • *m* → Ver meta semanal
 • *g* → Ver gráficos 📊
-• *info* → Entenda a depreciação 📉
 
 📊 *Ou escolha uma opção:*
 
