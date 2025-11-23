@@ -50,24 +50,22 @@ export function parseEvolutionAPIWebhook(
     return null;
   }
 
-  // PRIORIDADE CORRETA: Primeiro tenta remoteJid, depois remoteJidAlt
-  // remoteJid geralmente é o número válido
-  // remoteJidAlt só é usado quando remoteJid é grupo/canal
-  let remoteJid = payload.data.key.remoteJid;
-  
-  // Se remoteJid for grupo/canal/broadcast, tenta usar remoteJidAlt
-  if (remoteJid.includes('@g.us') || remoteJid.includes('@lid') || remoteJid.includes('@broadcast')) {
-    remoteJid = payload.data.key.remoteJidAlt || remoteJid;
+  // SOLUÇÃO UNIVERSAL: Tentar ambos e escolher o que for válido
+  // iOS envia número em remoteJid, Android envia em remoteJidAlt
+  const jid1 = payload.data.key.remoteJid;
+  const jid2 = payload.data.key.remoteJidAlt;
+
+  // Escolher o que for um número individual válido (@s.whatsapp.net)
+  let remoteJid: string | null = null;
+
+  if (jid1 && jid1.includes('@s.whatsapp.net')) {
+    remoteJid = jid1; // iOS geralmente usa remoteJid
+  } else if (jid2 && jid2.includes('@s.whatsapp.net')) {
+    remoteJid = jid2; // Android geralmente usa remoteJidAlt
   }
 
-  // Agora verifica se o número final é válido (individual)
-  // Ignorar se for canal/grupo/broadcast
-  if (remoteJid.includes('@lid') || remoteJid.includes('@g.us') || remoteJid.includes('@broadcast')) {
-    return null;
-  }
-
-  // Extrair número do remetente (apenas números individuais @s.whatsapp.net)
-  if (!remoteJid.includes('@s.whatsapp.net')) {
+  // Se nenhum for válido, ignorar (é grupo/canal/broadcast)
+  if (!remoteJid) {
     return null;
   }
 
