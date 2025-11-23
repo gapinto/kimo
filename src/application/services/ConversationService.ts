@@ -11,6 +11,7 @@ import { RegisterExpense } from '../../domain/usecases/RegisterExpense';
 import { CalculateDailySummary } from '../../domain/usecases/CalculateDailySummary';
 import { CalculateBreakeven } from '../../domain/usecases/CalculateBreakeven';
 import { GetInsights } from '../../domain/usecases/GetInsights';
+import { GetWeeklyProgress } from '../../domain/usecases/GetWeeklyProgress';
 import { DriverConfig } from '../../domain/entities/DriverConfig';
 import { FixedCost } from '../../domain/entities/FixedCost';
 import { Phone } from '../../domain/value-objects/Phone';
@@ -1048,15 +1049,13 @@ ${result.message}`;
       lastMonday.setHours(0, 0, 0, 0);
 
       const getWeeklyProgress = new GetWeeklyProgress(
-        this.dailySummaryRepository,
         this.userRepository,
-        this.driverConfigRepository,
-        this.fixedCostRepository
+        this.dailySummaryRepository
       );
 
       const progress = await getWeeklyProgress.execute({
         userId: session.userId,
-        startDate: lastMonday,
+        referenceDate: lastMonday,
       });
 
       let message = `📅 *SEMANA PASSADA*\n\n`;

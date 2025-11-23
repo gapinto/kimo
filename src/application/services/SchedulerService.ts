@@ -147,12 +147,12 @@ export class SchedulerService {
 
           const progress = await getWeeklyProgress.execute({
             userId: user.id,
-            currentDate: new Date(),
+            referenceDate: new Date(),
           });
 
           let message = `📅 *RESUMO DA SEMANA*\n\n`;
           message += `💰 Total ganho: R$ ${progress.totalProfit.toFixed(2)}\n`;
-          message += `🎯 Meta semanal: R$ ${progress.weeklyGoal.toFixed(2)}\n`;
+          message += `🎯 Meta semanal: R$ ${progress.weeklyGoal?.toFixed(2) || 'Não definida'}\n`;
           message += `📊 Atingido: ${progress.percentageComplete.toFixed(0)}%\n\n`;
 
           if (progress.percentageComplete >= 100) {
