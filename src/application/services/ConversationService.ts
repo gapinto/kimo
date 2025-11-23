@@ -304,14 +304,30 @@ export class ConversationService {
       // Usuário existente - mostrar menu
       session.userId = existingUser.id;
       
-      // Processar comando (texto ou ID de botão)
-      if (normalizedText.includes('registrar') || normalizedText === '1' || normalizedText === 'registrar') {
+      // Processar comando (texto, número ou ID de botão)
+      if (
+        normalizedText.includes('registrar') ||
+        normalizedText === '1' ||
+        normalizedText === 'registrar'
+      ) {
         await this.startRegistration(session);
-      } else if (normalizedText.includes('resumo') || normalizedText === '2' || normalizedText === 'resumo') {
+      } else if (
+        normalizedText.includes('resumo') ||
+        normalizedText === '2' ||
+        normalizedText === 'resumo'
+      ) {
         await this.showSummary(session);
-      } else if (normalizedText.includes('meta') || normalizedText === '3' || normalizedText === 'meta') {
+      } else if (
+        normalizedText.includes('meta') ||
+        normalizedText === '3' ||
+        normalizedText === 'meta'
+      ) {
         await this.showWeeklyProgress(session);
-      } else if (normalizedText.includes('insights') || normalizedText === '4' || normalizedText === 'insights') {
+      } else if (
+        normalizedText.includes('insights') ||
+        normalizedText === '4' ||
+        normalizedText === 'insights'
+      ) {
         await this.showInsights(session);
       } else {
         // Menu principal
@@ -999,14 +1015,19 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
     message: string,
     buttons: Array<{ id: string; text: string }>
   ): Promise<void> {
-    // Verificar se o provider suporta botões
-    if ('sendButtonMessage' in this.messagingProvider) {
-      await (this.messagingProvider as any).sendButtonMessage(to, message, buttons);
-    } else {
-      // Fallback: enviar como texto com opções numeradas
-      const options = buttons.map((btn, idx) => `${idx + 1}. ${btn.text}`).join('\n');
-      await this.sendMessage(to, `${message}\n\n${options}`);
+    // Tentar enviar com botões, se falhar, usar fallback
+    try {
+      if ('sendButtonMessage' in this.messagingProvider) {
+        await (this.messagingProvider as any).sendButtonMessage(to, message, buttons);
+        return;
+      }
+    } catch (error) {
+      logger.warn('Button message failed, using text fallback', error);
     }
+
+    // Fallback: enviar como texto com opções numeradas
+    const options = buttons.map((btn, idx) => `${idx + 1}. ${btn.text}`).join('\n');
+    await this.sendMessage(to, `${message}\n\n${options}\n\nDigite o número da opção:`);
   }
 
   private getSession(phone: string): ConversationSession | undefined {
