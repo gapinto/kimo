@@ -50,11 +50,18 @@ export function parseEvolutionAPIWebhook(
     return null;
   }
 
-  // Usar remoteJidAlt se disponível (mensagens via canal)
-  // Caso contrário, usar remoteJid
-  let remoteJid = payload.data.key.remoteJidAlt || payload.data.key.remoteJid;
+  // PRIORIDADE CORRETA: Primeiro tenta remoteJid, depois remoteJidAlt
+  // remoteJid geralmente é o número válido
+  // remoteJidAlt só é usado quando remoteJid é grupo/canal
+  let remoteJid = payload.data.key.remoteJid;
+  
+  // Se remoteJid for grupo/canal/broadcast, tenta usar remoteJidAlt
+  if (remoteJid.includes('@g.us') || remoteJid.includes('@lid') || remoteJid.includes('@broadcast')) {
+    remoteJid = payload.data.key.remoteJidAlt || remoteJid;
+  }
 
-  // Ignorar mensagens de canais/comunidades (@lid, @g.us, @broadcast)
+  // Agora verifica se o número final é válido (individual)
+  // Ignorar se for canal/grupo/broadcast
   if (remoteJid.includes('@lid') || remoteJid.includes('@g.us') || remoteJid.includes('@broadcast')) {
     return null;
   }
