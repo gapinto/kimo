@@ -822,7 +822,7 @@ Digite apenas o número (ex: 150):`;
       if (session.data.carValue) {
         message += `🚗 Valor do carro: R$ ${(session.data.carValue as number).toLocaleString('pt-BR')}\n`;
       }
-      if (session.data.financingBalance && session.data.financingBalance > 0) {
+      if (session.data.financingBalance && (session.data.financingBalance as number) > 0) {
         message += `💳 Saldo devedor: R$ ${(session.data.financingBalance as number).toLocaleString('pt-BR')}\n`;
         message += `📅 ${session.data.financingMonths} parcelas de R$ ${(session.data.financingPayment as number).toLocaleString('pt-BR')}\n`;
       }

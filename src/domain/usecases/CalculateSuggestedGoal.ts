@@ -85,7 +85,7 @@ export class CalculateSuggestedGoal {
     }
 
     // Buscar outros custos fixos do banco
-    const fixedCosts = await this.fixedCostRepository.findByUserId(input.userId);
+    const fixedCosts = await this.fixedCostRepository.findActiveByUserId(input.userId);
     let monthlyOtherFixedCosts = 0;
     
     fixedCosts.forEach(cost => {

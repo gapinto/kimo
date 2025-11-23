@@ -21,7 +21,7 @@ export class PrismaExpenseRepository implements IExpenseRepository {
           type: expense.type,
           amount: expense.amount.value,
           date: expense.date,
-          description: expense.description,
+          description: expense.note, // note → description
           createdAt: expense.createdAt,
         },
       });
@@ -185,7 +185,7 @@ export class PrismaExpenseRepository implements IExpenseRepository {
       type: row.type as ExpenseType,
       amount: Money.create(Number(row.amount)),
       date: row.date,
-      description: row.description ?? undefined,
+      note: row.description ?? undefined, // description → note
       createdAt: row.createdAt,
     });
   }
