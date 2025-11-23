@@ -1019,7 +1019,7 @@ ${result.message}`;
         `💸 Despesas: R$ ${summary.expenses.value.toFixed(2)}\n` +
         `✅ Lucro: R$ ${summary.profit.value.toFixed(2)}\n` +
         `🚗 KM: ${summary.km.value} km\n` +
-        `📊 Custo/KM: R$ ${summary.costPerKm?.toFixed(2) || '0.00'}`;
+        `📊 Custo/KM: R$ ${summary.costPerKm?.value.toFixed(2) || '0.00'}`;
 
       await this.sendMessage(session.phone, message);
     } catch (error) {
@@ -1048,8 +1048,10 @@ ${result.message}`;
       lastMonday.setHours(0, 0, 0, 0);
 
       const getWeeklyProgress = new GetWeeklyProgress(
+        this.dailySummaryRepository,
         this.userRepository,
-        this.dailySummaryRepository
+        this.driverConfigRepository,
+        this.fixedCostRepository
       );
 
       const progress = await getWeeklyProgress.execute({

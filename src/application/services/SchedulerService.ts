@@ -147,7 +147,7 @@ export class SchedulerService {
 
           const progress = await getWeeklyProgress.execute({
             userId: user.id,
-            startDate: this.getStartOfWeek(),
+            currentDate: new Date(),
           });
 
           let message = `📅 *RESUMO DA SEMANA*\n\n`;
