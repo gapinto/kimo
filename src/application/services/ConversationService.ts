@@ -370,10 +370,20 @@ export class ConversationService {
     const existingUser = await this.userRepository.findByPhone(phone);
 
     if (!existingUser) {
-      // Novo usuário - iniciar onboarding
-      await this.startOnboarding(session);
+      // Novo usuário - EXIGIR "oi kimo" para iniciar onboarding
+      if (normalizedText === 'oi kimo' || normalizedText === 'oikimo' || normalizedText === 'oi, kimo') {
+        await this.startOnboarding(session);
+      } else {
+        // Ignora outras mensagens de usuários não cadastrados
+        // Não responde nada para evitar spam
+        logger.info('New user sent message but not "oi kimo"', { 
+          phone: session.phone, 
+          message: text 
+        });
+        // Não fazer nada - usuário precisa dizer "oi kimo" primeiro
+      }
     } else {
-      // Usuário existente - mostrar menu
+      // Usuário existente - mostrar menu ou processar comando
       session.userId = existingUser.id;
       
       // Processar comando (texto, número ou ID de botão)
