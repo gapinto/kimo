@@ -111,6 +111,21 @@ export class ConversationService {
         return;
       }
 
+      // Histórico
+      if (normalizedText === 'ontem' || normalizedText === 'yesterday') {
+        session.state = ConversationState.IDLE;
+        await this.showYesterday(session);
+        this.saveSession(session);
+        return;
+      }
+
+      if (normalizedText === 'semana' || normalizedText.includes('semana passada')) {
+        session.state = ConversationState.IDLE;
+        await this.showLastWeek(session);
+        this.saveSession(session);
+        return;
+      }
+
       // Processar baseado no estado atual
       switch (session.state) {
         case ConversationState.IDLE:
@@ -971,6 +986,100 @@ ${result.message}`;
   private async showInsights(session: ConversationSession): Promise<void> {
     // Mesmo que showSummary
     await this.showSummary(session);
+  }
+
+  /**
+   * Mostra resumo de ontem
+   */
+  private async showYesterday(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const summary = await this.dailySummaryRepository.findByUserAndDate(
+        session.userId,
+        yesterday
+      );
+
+      if (!summary) {
+        await this.sendMessage(
+          session.phone,
+          '📅 *Ontem*\n\nNenhum registro encontrado para ontem.'
+        );
+        return;
+      }
+
+      const message = `📅 *RESUMO DE ONTEM*\n\n` +
+        `💰 Ganhos: R$ ${summary.earnings.value.toFixed(2)}\n` +
+        `💸 Despesas: R$ ${summary.expenses.value.toFixed(2)}\n` +
+        `✅ Lucro: R$ ${summary.profit.value.toFixed(2)}\n` +
+        `🚗 KM: ${summary.km.value} km\n` +
+        `📊 Custo/KM: R$ ${summary.costPerKm?.toFixed(2) || '0.00'}`;
+
+      await this.sendMessage(session.phone, message);
+    } catch (error) {
+      logger.error('Error showing yesterday', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao buscar dados de ontem.'
+      );
+    }
+  }
+
+  /**
+   * Mostra resumo da semana passada
+   */
+  private async showLastWeek(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      // Calcular início da semana passada
+      const now = new Date();
+      const lastMonday = new Date(now);
+      lastMonday.setDate(now.getDate() - now.getDay() - 6);
+      lastMonday.setHours(0, 0, 0, 0);
+
+      const getWeeklyProgress = new GetWeeklyProgress(
+        this.userRepository,
+        this.dailySummaryRepository
+      );
+
+      const progress = await getWeeklyProgress.execute({
+        userId: session.userId,
+        startDate: lastMonday,
+      });
+
+      let message = `📅 *SEMANA PASSADA*\n\n`;
+      message += `💰 Total: R$ ${progress.totalProfit.toFixed(2)}\n`;
+      message += `🎯 Meta: R$ ${progress.weeklyGoal.toFixed(2)}\n`;
+      message += `📊 Atingido: ${progress.percentageComplete.toFixed(0)}%\n`;
+      message += `📅 Dias trabalhados: ${progress.daysWithData}/7\n\n`;
+
+      if (progress.dailySummaries.length > 0) {
+        message += `*Detalhes por dia:*\n`;
+        progress.dailySummaries.forEach((day) => {
+          const date = new Date(day.date);
+          const dayName = date.toLocaleDateString('pt-BR', { weekday: 'short' });
+          message += `${dayName}: R$ ${day.profit.toFixed(2)}\n`;
+        });
+      }
+
+      await this.sendMessage(session.phone, message);
+    } catch (error) {
+      logger.error('Error showing last week', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao buscar dados da semana passada.'
+      );
+    }
   }
 
   private async showMainMenu(session: ConversationSession, name?: string): Promise<void> {
