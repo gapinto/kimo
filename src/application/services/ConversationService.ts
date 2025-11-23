@@ -12,6 +12,7 @@ import { CalculateDailySummary } from '../../domain/usecases/CalculateDailySumma
 import { CalculateBreakeven } from '../../domain/usecases/CalculateBreakeven';
 import { GetInsights } from '../../domain/usecases/GetInsights';
 import { GetWeeklyProgress } from '../../domain/usecases/GetWeeklyProgress';
+import { EvaluateTrip } from '../../domain/usecases/EvaluateTrip';
 import { DriverConfig } from '../../domain/entities/DriverConfig';
 import { FixedCost } from '../../domain/entities/FixedCost';
 import { Phone } from '../../domain/value-objects/Phone';
@@ -87,6 +88,16 @@ export class ConversationService {
         // Resetar estado para IDLE antes de processar
         session.state = ConversationState.IDLE;
         await this.handleQuickRegister(session, quickRegisterMatch);
+        this.saveSession(session);
+        return;
+      }
+
+      // Comando "vale a pena": "vale 45 12" ou "v 45 12"
+      const evaluateMatch = normalizedText.match(/^(?:vale|v)\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)$/);
+      
+      if (evaluateMatch) {
+        session.state = ConversationState.IDLE;
+        await this.handleEvaluateTrip(session, evaluateMatch);
         this.saveSession(session);
         return;
       }
@@ -1097,6 +1108,7 @@ ${result.message}`;
 
 ⚡ *COMANDOS RÁPIDOS:*
 • \`45 12\` → Registrar corrida (R$45, 12km)
+• \`vale 45 12\` ou \`v 45 12\` → Vale a pena? 🤔
 • \`g80\` → Combustível R$80
 • \`r\` → Ver resumo do dia
 • \`m\` → Ver meta semanal
@@ -1871,6 +1883,122 @@ Digite o código ou comando:`;
     };
 
     return labels[type] || type;
+  }
+
+  // ============================================
+  // AVALIAÇÃO DE CORRIDA ("VALE A PENA?")
+  // ============================================
+
+  /**
+   * Avalia se uma corrida vale a pena
+   */
+  private async handleEvaluateTrip(
+    session: ConversationSession,
+    match: RegExpMatchArray
+  ): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      // Extrair valores
+      const earnings = parseFloat(match[1].replace(',', '.'));
+      const km = parseFloat(match[2].replace(',', '.'));
+
+      // Validações básicas
+      if (isNaN(earnings) || isNaN(km) || earnings <= 0 || km <= 0) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Valores inválidos. Use: `vale 45 12` (R$ 45 por 12 km)'
+        );
+        return;
+      }
+
+      // Executar avaliação
+      const evaluateTrip = new EvaluateTrip(
+        this.driverConfigRepository,
+        this.fixedCostRepository,
+        this.dailySummaryRepository
+      );
+
+      const result = await evaluateTrip.execute({
+        userId: session.userId,
+        earnings,
+        km,
+      });
+
+      // Montar mensagem
+      let message = `🤔 *VALE A PENA ESSA CORRIDA?*\n\n`;
+      message += `💰 *Ganho:* R$ ${result.earnings.toFixed(2)}\n`;
+      message += `🚗 *Distância:* ${result.km.toFixed(1)} km\n`;
+      message += `━━━━━━━━━━━━━━━━\n\n`;
+
+      message += `📊 *CUSTOS ESTIMADOS:*\n`;
+      message += `⛽ Combustível: R$ ${result.fuelCost.toFixed(2)}\n`;
+      message += `🔧 Manutenção: R$ ${result.maintenanceCost.toFixed(2)}\n`;
+      if (result.depreciationCost > 0) {
+        message += `📉 Depreciação: R$ ${result.depreciationCost.toFixed(2)}\n`;
+      }
+      message += `💸 *Total:* R$ ${result.totalCost.toFixed(2)}\n\n`;
+
+      message += `━━━━━━━━━━━━━━━━\n`;
+      message += `✅ *LUCRO:* R$ ${result.profit.toFixed(2)}\n`;
+      message += `📈 *Por KM:* R$ ${result.profitPerKm.toFixed(2)}/km\n\n`;
+
+      // Comparação com média
+      if (result.comparisonWithAverage) {
+        const diff = result.comparisonWithAverage.difference;
+        const diffPercent = (
+          (diff / result.comparisonWithAverage.userAverageProfitPerKm) *
+          100
+        ).toFixed(0);
+
+        message += `📊 *Sua média:* R$ ${result.comparisonWithAverage.userAverageProfitPerKm.toFixed(2)}/km\n`;
+
+        if (diff > 0) {
+          message += `📈 *${diffPercent}% acima* da sua média\n\n`;
+        } else if (diff < 0) {
+          message += `📉 *${Math.abs(parseFloat(diffPercent))}% abaixo* da sua média\n\n`;
+        } else {
+          message += `➡️ *Igual* à sua média\n\n`;
+        }
+      }
+
+      // Recomendação com emoji
+      message += `━━━━━━━━━━━━━━━━\n`;
+      if (result.recommendation === 'accept') {
+        message += `✅ *ACEITE!*\n`;
+      } else if (result.recommendation === 'reject') {
+        message += `❌ *NÃO ACEITE!*\n`;
+      } else {
+        message += `🤔 *VOCÊ DECIDE*\n`;
+      }
+      message += `${result.message}`;
+
+      await this.sendMessage(session.phone, message);
+
+      logger.info('Trip evaluation sent', {
+        userId: session.userId,
+        earnings,
+        km,
+        recommendation: result.recommendation,
+      });
+    } catch (error) {
+      logger.error('Error evaluating trip', error);
+
+      if (error instanceof Error && error.message.includes('configuration not found')) {
+        await this.sendMessage(
+          session.phone,
+          '⚠️ Complete o cadastro primeiro para usar essa função! Digite "oi" para começar.'
+        );
+      } else {
+        await this.sendMessage(
+          session.phone,
+          '❌ Erro ao avaliar corrida. Tente novamente.'
+        );
+      }
+    }
   }
 }
 
