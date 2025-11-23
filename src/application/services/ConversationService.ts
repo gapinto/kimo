@@ -71,6 +71,46 @@ export class ConversationService {
       // Atualizar última interação
       session.lastInteraction = new Date();
 
+      // DETECTAR COMANDOS RÁPIDOS PRIMEIRO (funcionam em qualquer estado)
+      const normalizedText = text.toLowerCase().trim();
+
+      // Comando rápido de corrida: "45 12" ou "45 12 5"
+      const quickRegisterMatch = normalizedText.match(/^(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)(?:\s+(\d+(?:[.,]\d+)?))?$/);
+      
+      if (quickRegisterMatch) {
+        // Resetar estado para IDLE antes de processar
+        session.state = ConversationState.IDLE;
+        await this.handleQuickRegister(session, quickRegisterMatch);
+        this.saveSession(session);
+        return;
+      }
+
+      // Comando rápido de despesa: "g80", "m150 reparo"
+      const quickExpenseMatch = text.match(/^([gmpel])(\d+(?:[.,]\d+)?)(?:\s+(.+))?$/i);
+      
+      if (quickExpenseMatch) {
+        // Resetar estado para IDLE antes de processar
+        session.state = ConversationState.IDLE;
+        await this.handleQuickExpense(session, quickExpenseMatch);
+        this.saveSession(session);
+        return;
+      }
+
+      // Comandos ultra-curtos
+      if (normalizedText === 'r' || normalizedText === 'resumo') {
+        session.state = ConversationState.IDLE;
+        await this.showSummary(session);
+        this.saveSession(session);
+        return;
+      }
+
+      if (normalizedText === 'm' || normalizedText === 'meta') {
+        session.state = ConversationState.IDLE;
+        await this.showWeeklyProgress(session);
+        this.saveSession(session);
+        return;
+      }
+
       // Processar baseado no estado atual
       switch (session.state) {
         case ConversationState.IDLE:
@@ -303,52 +343,37 @@ export class ConversationService {
     } else {
       // Usuário existente - mostrar menu
       session.userId = existingUser.id;
-
-      // COMANDO RÁPIDO: detectar formato "45 12" ou "45 12 5"
-      const quickRegisterMatch = normalizedText.match(/^(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)(?:\s+(\d+(?:[.,]\d+)?))?$/);
-      
-      if (quickRegisterMatch) {
-        await this.handleQuickRegister(session, quickRegisterMatch);
-        return;
-      }
-
-      // COMANDO RÁPIDO PARA DESPESAS: g80, m150, p12, etc
-      const quickExpenseMatch = text.match(/^([gmpel])(\d+(?:[.,]\d+)?)(?:\s+(.+))?$/i);
-      
-      if (quickExpenseMatch) {
-        await this.handleQuickExpense(session, quickExpenseMatch);
-        return;
-      }
       
       // Processar comando (texto, número ou ID de botão)
       if (
         normalizedText.includes('registrar') ||
         normalizedText === '1' ||
-        normalizedText === 'registrar'
+        normalizedText === 'c' ||
+        normalizedText === 'corrida'
       ) {
         await this.startRegistration(session);
       } else if (
         normalizedText.includes('despesa') ||
         normalizedText === '2' ||
-        normalizedText === 'despesa'
+        normalizedText === 'd'
       ) {
         await this.startExpenseRegistration(session);
       } else if (
         normalizedText.includes('resumo') ||
         normalizedText === '3' ||
-        normalizedText === 'resumo'
+        normalizedText === 'r'
       ) {
         await this.showSummary(session);
       } else if (
         normalizedText.includes('meta') ||
         normalizedText === '4' ||
-        normalizedText === 'meta'
+        normalizedText === 'm'
       ) {
         await this.showWeeklyProgress(session);
       } else if (
         normalizedText.includes('insights') ||
         normalizedText === '5' ||
-        normalizedText === 'insights'
+        normalizedText === 'i'
       ) {
         await this.showInsights(session);
       } else {
