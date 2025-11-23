@@ -144,6 +144,13 @@ export class ConversationService {
         return;
       }
 
+      if (normalizedText === 'deprec' || normalizedText === 'depreciacao' || normalizedText === 'depreciação' || normalizedText === 'info') {
+        session.state = ConversationState.IDLE;
+        await this.showDepreciationInfo(session);
+        this.saveSession(session);
+        return;
+      }
+
       // Processar baseado no estado atual
       switch (session.state) {
         case ConversationState.IDLE:
@@ -444,6 +451,9 @@ export class ConversationService {
       } else if (normalizedText.match(/^preco\s+(\d+(?:[.,]\d+)?)$/)) {
         // Comando para atualizar preço da gasolina: "preco 5.80"
         await this.updateFuelPrice(session, normalizedText);
+      } else if (normalizedText === 'deprec' || normalizedText === 'depreciacao' || normalizedText === 'depreciação' || normalizedText === 'info') {
+        // Comando para explicar depreciação
+        await this.showDepreciationInfo(session);
       } else {
         // Menu principal
         await this.showMainMenu(session, existingUser.name);
@@ -833,7 +843,9 @@ Digite apenas o número (ex: 150):`;
       message += `⛽ Combustível: R$ ${goalData.dailyFuelCost.toFixed(2)}\n`;
       message += `🔧 Manutenção: R$ ${goalData.dailyMaintenanceCost.toFixed(2)}\n`;
       if (goalData.dailyDepreciationCost > 0) {
+        const monthlyDepreciation = goalData.dailyDepreciationCost * goalData.workDaysPerWeek * 4.33;
         message += `📉 Depreciação: R$ ${goalData.dailyDepreciationCost.toFixed(2)}\n`;
+        message += `   _(seu carro perde ~R$ ${monthlyDepreciation.toFixed(0)}/mês)_\n`;
       }
       message += `📌 Custos fixos: R$ ${goalData.dailyFixedCosts.toFixed(2)}\n`;
       message += `━━━━━━━━━━━━━━\n`;
@@ -1189,6 +1201,75 @@ ${result.message}`;
   }
 
   /**
+   * Mostra informações detalhadas sobre depreciação
+   */
+  private async showDepreciationInfo(session: ConversationSession): Promise<void> {
+    try {
+      const user = await this.userRepository.findById(session.userId);
+      if (!user) {
+        await this.sendMessage(session.phone, 'Erro ao buscar seus dados. Digite "oi" para recomeçar.');
+        return;
+      }
+
+      const config = await this.driverConfigRepository.findByUserId(user.id);
+      if (!config || !config.carValue) {
+        await this.sendMessage(
+          session.phone,
+          '⚠️ Você não tem um carro cadastrado ou seu perfil é de carro alugado.\n\n' +
+          'A depreciação só se aplica a carros próprios (quitados ou financiados).'
+        );
+        return;
+      }
+
+      const carValue = config.carValue.value;
+      const annualDepreciation = carValue * 0.18;
+      const monthlyDepreciation = annualDepreciation / 12;
+      const weeklyDepreciation = monthlyDepreciation / 4.33;
+      const dailyDepreciation = weeklyDepreciation / config.workDaysPerWeek;
+      
+      // Valor após 5 anos (18% ao ano composto)
+      const valueAfter5Years = carValue * Math.pow(0.82, 5);
+
+      let message = `📉 *DEPRECIAÇÃO DO SEU CARRO*\n\n`;
+      message += `🚗 *Valor atual:* R$ ${carValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n`;
+      
+      message += `📊 *Como seu carro perde valor:*\n\n`;
+      message += `📅 Por ANO: R$ ${annualDepreciation.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} _(18% do valor)_\n`;
+      message += `📆 Por MÊS: R$ ${monthlyDepreciation.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+      message += `📍 Por SEMANA: R$ ${weeklyDepreciation.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+      message += `📌 Por DIA: R$ ${dailyDepreciation.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n`;
+      
+      message += `💡 *O que isso significa?*\n`;
+      message += `Todo dia que você trabalha, seu carro perde ~R$ ${dailyDepreciation.toFixed(0)} em valor de revenda.\n\n`;
+      
+      message += `*Por isso é importante:*\n`;
+      message += `✅ Incluir isso no custo por corrida\n`;
+      message += `✅ Fazer meta de lucro suficiente\n`;
+      message += `✅ Manutenção preventiva (vale a pena!)\n\n`;
+      
+      message += `🔄 *Projeção (5 anos):*\n`;
+      message += `Valor hoje: R$ ${carValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+      message += `Valor estimado: R$ ${valueAfter5Years.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} `;
+      const percentLoss = ((carValue - valueAfter5Years) / carValue * 100);
+      message += `_(-${percentLoss.toFixed(0)}%)_\n\n`;
+      
+      message += `💰 *Dica KIMO:*\n`;
+      message += `Reserve parte do lucro mensal para trocar o carro no futuro!\n\n`;
+      
+      message += `━━━━━━━━━━━━━━━━\n`;
+      message += `💬 Digite *oi* para voltar ao menu`;
+
+      await this.sendMessage(session.phone, message);
+    } catch (error) {
+      this.logger.error('Error showing depreciation info', error);
+      await this.sendMessage(
+        session.phone,
+        'Desculpe, ocorreu um erro ao buscar as informações de depreciação. Digite "oi" para recomeçar.'
+      );
+    }
+  }
+
+  /**
    * Mostra resumo de ontem
    */
   private async showYesterday(session: ConversationSession): Promise<void> {
@@ -1301,6 +1382,7 @@ ${result.message}`;
 • *r* → Resumo do dia
 • *m* → Ver meta semanal
 • *g* → Ver gráficos 📊
+• *info* → Entenda a depreciação 📉
 
 📊 *Ou escolha uma opção:*`;
 
