@@ -1261,7 +1261,7 @@ ${result.message}`;
 
       await this.sendMessage(session.phone, message);
     } catch (error) {
-      this.logger.error('Error showing depreciation info', error);
+      logger.error('Error showing depreciation info', error);
       await this.sendMessage(
         session.phone,
         'Desculpe, ocorreu um erro ao buscar as informações de depreciação. Digite "oi" para recomeçar.'
