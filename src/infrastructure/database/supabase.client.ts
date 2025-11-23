@@ -49,3 +49,6 @@ export const getSupabaseClient = (): SupabaseClient => {
   return SupabaseClientFactory.getInstance();
 };
 
+// Export singleton instance directly (for convenience)
+export const supabase = SupabaseClientFactory.getInstance();
+
