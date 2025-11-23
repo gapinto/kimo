@@ -66,6 +66,11 @@ export class PrismaUserRepository implements IUserRepository {
         updatedAt: row.updatedAt,
       });
     } catch (error) {
+      console.error('PrismaUserRepository.findByPhone error details:', {
+        phone: phone.value,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       throw new DatabaseError('Failed to find user by phone', error);
     }
   }
