@@ -10,6 +10,10 @@ export interface DriverConfigProps {
   avgFuelPrice: Money;           // Preço médio do combustível
   avgKmPerDay: number;           // KM médio por dia
   workDaysPerWeek: number;       // Dias trabalhados por semana
+  // Financiamento (se aplicável)
+  financingBalance?: Money;      // Saldo devedor do financiamento
+  financingMonthlyPayment?: Money; // Valor da parcela mensal
+  financingRemainingMonths?: number; // Parcelas restantes
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +36,9 @@ export class DriverConfig {
     avgFuelPrice: Money;
     avgKmPerDay: number;
     workDaysPerWeek?: number;
+    financingBalance?: Money;
+    financingMonthlyPayment?: Money;
+    financingRemainingMonths?: number;
   }): DriverConfig {
     return new DriverConfig({
       id: crypto.randomUUID(),
@@ -42,6 +49,9 @@ export class DriverConfig {
       avgFuelPrice: data.avgFuelPrice,
       avgKmPerDay: data.avgKmPerDay,
       workDaysPerWeek: data.workDaysPerWeek ?? 6,
+      financingBalance: data.financingBalance,
+      financingMonthlyPayment: data.financingMonthlyPayment,
+      financingRemainingMonths: data.financingRemainingMonths,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -110,6 +120,18 @@ export class DriverConfig {
     return this.props.workDaysPerWeek;
   }
 
+  public get financingBalance(): Money | undefined {
+    return this.props.financingBalance;
+  }
+
+  public get financingMonthlyPayment(): Money | undefined {
+    return this.props.financingMonthlyPayment;
+  }
+
+  public get financingRemainingMonths(): number | undefined {
+    return this.props.financingRemainingMonths;
+  }
+
   public get createdAt(): Date {
     return this.props.createdAt;
   }
@@ -142,6 +164,17 @@ export class DriverConfig {
       throw new Error('Fuel price must be positive');
     }
     this.props.avgFuelPrice = Money.create(pricePerLiter);
+    this.props.updatedAt = new Date();
+  }
+
+  public updateFinancingInfo(data: {
+    balance?: Money;
+    monthlyPayment?: Money;
+    remainingMonths?: number;
+  }): void {
+    if (data.balance) this.props.financingBalance = data.balance;
+    if (data.monthlyPayment) this.props.financingMonthlyPayment = data.monthlyPayment;
+    if (data.remainingMonths !== undefined) this.props.financingRemainingMonths = data.remainingMonths;
     this.props.updatedAt = new Date();
   }
 
@@ -205,6 +238,9 @@ export class DriverConfig {
       avgFuelPrice: this.props.avgFuelPrice.toJSON(),
       avgKmPerDay: this.props.avgKmPerDay,
       workDaysPerWeek: this.props.workDaysPerWeek,
+      financingBalance: this.props.financingBalance?.toJSON(),
+      financingMonthlyPayment: this.props.financingMonthlyPayment?.toJSON(),
+      financingRemainingMonths: this.props.financingRemainingMonths,
       createdAt: this.props.createdAt.toISOString(),
       updatedAt: this.props.updatedAt.toISOString(),
     };

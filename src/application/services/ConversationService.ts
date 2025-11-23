@@ -13,6 +13,7 @@ import { CalculateBreakeven } from '../../domain/usecases/CalculateBreakeven';
 import { GetInsights } from '../../domain/usecases/GetInsights';
 import { GetWeeklyProgress } from '../../domain/usecases/GetWeeklyProgress';
 import { EvaluateTrip } from '../../domain/usecases/EvaluateTrip';
+import { CalculateSuggestedGoal } from '../../domain/usecases/CalculateSuggestedGoal';
 import { DriverConfig } from '../../domain/entities/DriverConfig';
 import { FixedCost } from '../../domain/entities/FixedCost';
 import { Phone } from '../../domain/value-objects/Phone';
@@ -171,6 +172,18 @@ export class ConversationService {
 
         case ConversationState.ONBOARDING_CAR_VALUE:
           await this.handleOnboardingCarValue(session, text);
+          break;
+
+        case ConversationState.ONBOARDING_FINANCING_BALANCE:
+          await this.handleOnboardingFinancingBalance(session, text);
+          break;
+
+        case ConversationState.ONBOARDING_FINANCING_PAYMENT:
+          await this.handleOnboardingFinancingPayment(session, text);
+          break;
+
+        case ConversationState.ONBOARDING_FINANCING_MONTHS:
+          await this.handleOnboardingFinancingMonths(session, text);
           break;
 
         case ConversationState.REGISTER_EARNINGS:
@@ -570,18 +583,102 @@ Digite apenas o valor (ex: 50000):`;
 
     session.data.carValue = carValue;
 
-    // Se tiver financiamento, perguntar valor da parcela
+    // Se tiver financiamento, perguntar saldo devedor
     if (session.data.profile === DriverProfile.OWN_FINANCED) {
       const message = `✅ R$ ${carValue.toLocaleString('pt-BR')}
 
-*3️⃣ Quanto é a parcela do financiamento por mês?*
+*6️⃣ Quanto você ainda deve do financiamento?*
 
-Digite apenas o valor (ex: 800):`;
+Se já quitou, digite 0
+
+Exemplo: 28000`;
 
       await this.sendMessage(session.phone, message);
-      // Próximo estado seria ONBOARDING_FINANCING (adicionar depois)
+      session.state = ConversationState.ONBOARDING_FINANCING_BALANCE;
+      return;
     }
 
+    // Se não tiver financiamento, pula para consumo de combustível
+    await this.askFuelConsumption(session);
+  }
+
+  private async handleOnboardingFinancingBalance(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const balance = this.parseNumber(text);
+
+    if (balance === null || balance < 0) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite apenas números (ou 0 se já quitou):'
+      );
+      return;
+    }
+
+    session.data.financingBalance = balance;
+
+    if (balance === 0) {
+      // Não tem mais financiamento, pula para combustível
+      await this.askFuelConsumption(session);
+      return;
+    }
+
+    // Perguntar parcela mensal
+    const message = `✅ Saldo devedor: R$ ${balance.toLocaleString('pt-BR')}
+
+*7️⃣ Qual o valor da parcela mensal?*
+
+Exemplo: 890`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.ONBOARDING_FINANCING_PAYMENT;
+  }
+
+  private async handleOnboardingFinancingPayment(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const payment = this.parseNumber(text);
+
+    if (!payment || payment <= 0) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Valor inválido. Digite apenas números (ex: 890):'
+      );
+      return;
+    }
+
+    session.data.financingPayment = payment;
+
+    // Perguntar quantas parcelas faltam
+    const message = `✅ Parcela: R$ ${payment.toLocaleString('pt-BR')}/mês
+
+*8️⃣ Quantas parcelas ainda faltam?*
+
+Exemplo: 36`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.ONBOARDING_FINANCING_MONTHS;
+  }
+
+  private async handleOnboardingFinancingMonths(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const months = this.parseNumber(text);
+
+    if (!months || months <= 0 || months > 120) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Quantidade inválida. Digite um número entre 1 e 120:'
+      );
+      return;
+    }
+
+    session.data.financingMonths = months;
+
+    // Agora sim, prosseguir para consumo de combustível
     await this.askFuelConsumption(session);
   }
 
@@ -678,7 +775,7 @@ Digite apenas o número (ex: 150):`;
 
       session.userId = userResult.userId;
 
-      // 2. Criar configuração do motorista
+      // 2. Criar configuração do motorista (incluindo dados de financiamento)
       const config = DriverConfig.create({
         userId: userResult.userId,
         profile: session.data.profile as DriverProfile,
@@ -687,6 +784,9 @@ Digite apenas o número (ex: 150):`;
         avgFuelPrice: Money.create(session.data.fuelPrice as number),
         avgKmPerDay: session.data.avgKm as number,
         workDaysPerWeek: 6,
+        financingBalance: session.data.financingBalance ? Money.create(session.data.financingBalance as number) : undefined,
+        financingMonthlyPayment: session.data.financingPayment ? Money.create(session.data.financingPayment as number) : undefined,
+        financingRemainingMonths: session.data.financingMonths as number | undefined,
       });
 
       await this.driverConfigRepository.save(config);
@@ -704,21 +804,61 @@ Digite apenas o número (ex: 150):`;
         await this.fixedCostRepository.save(rental);
       }
 
-      logger.info('Onboarding completed', { userId: userResult.userId });
+      // 4. Calcular meta sugerida
+      const calculateGoal = new CalculateSuggestedGoal(
+        this.driverConfigRepository,
+        this.fixedCostRepository
+      );
+      
+      const goalData = await calculateGoal.execute({ userId: userResult.userId });
 
-      // 4. Mensagem de sucesso
-      const fuelCost = this.calculateFuelCost(session);
-      const message = `🎉 *Pronto! Perfil configurado.*
+      logger.info('Onboarding completed', { userId: userResult.userId, goalData });
 
-📊 Seu custo estimado de combustível: *R$ ${fuelCost.toFixed(2)}/dia*
+      // 5. Montar mensagem de sucesso com breakdown detalhado
+      let message = `🎉 *Perfil configurado com sucesso!*\n\n`;
+      
+      message += `📋 *Resumo do seu perfil:*\n`;
+      message += `👤 ${session.data.profileName}\n`;
+      if (session.data.carValue) {
+        message += `🚗 Valor do carro: R$ ${(session.data.carValue as number).toLocaleString('pt-BR')}\n`;
+      }
+      if (session.data.financingBalance && session.data.financingBalance > 0) {
+        message += `💳 Saldo devedor: R$ ${(session.data.financingBalance as number).toLocaleString('pt-BR')}\n`;
+        message += `📅 ${session.data.financingMonths} parcelas de R$ ${(session.data.financingPayment as number).toLocaleString('pt-BR')}\n`;
+      }
+      message += `⛽ Consumo: ${session.data.fuelConsumption}km/L\n`;
+      message += `📏 Média: ${session.data.avgKm}km/dia\n\n`;
 
-Comandos disponíveis:
-1️⃣ *Registrar dia* - Registrar ganhos e despesas
-2️⃣ *Resumo* - Ver resumo de hoje
-3️⃣ *Meta* - Ver progresso semanal
-4️⃣ *Insights* - Dicas personalizadas
+      message += `💰 *Breakdown de Custos (por dia):*\n`;
+      message += `⛽ Combustível: R$ ${goalData.dailyFuelCost.toFixed(2)}\n`;
+      message += `🔧 Manutenção: R$ ${goalData.dailyMaintenanceCost.toFixed(2)}\n`;
+      if (goalData.dailyDepreciationCost > 0) {
+        message += `📉 Depreciação: R$ ${goalData.dailyDepreciationCost.toFixed(2)}\n`;
+      }
+      message += `📌 Custos fixos: R$ ${goalData.dailyFixedCosts.toFixed(2)}\n`;
+      message += `━━━━━━━━━━━━━━\n`;
+      message += `💸 *Total/dia: R$ ${goalData.totalDailyCost.toFixed(2)}*\n\n`;
 
-Digite o número ou o nome do comando!`;
+      message += `🎯 *Metas Sugeridas:*\n`;
+      message += `📅 *Meta Diária: R$ ${goalData.suggestedDailyGoal.toFixed(2)}*\n`;
+      message += `📆 *Meta Semanal: R$ ${goalData.suggestedWeeklyGoal.toFixed(2)}*\n\n`;
+
+      message += `💵 *Lucro Projetado:*\n`;
+      message += `• Por dia: R$ ${goalData.dailyProfit.toFixed(2)}\n`;
+      message += `• Por semana: R$ ${goalData.weeklyProfit.toFixed(2)}\n`;
+      message += `• Por mês: R$ ${goalData.monthlyProfit.toFixed(2)}\n\n`;
+
+      message += `⚡ *COMANDOS RÁPIDOS:*\n\n`;
+      message += `• *45 12* → Registrar corrida\n`;
+      message += `  _(R$45 ganhos, 12km rodados)_\n\n`;
+      message += `• *vale 45 12* → Vale a pena? 🤔\n`;
+      message += `  _(avaliar corrida antes de aceitar)_\n\n`;
+      message += `• *g80* → Combustível\n`;
+      message += `  _(R$80 de gasolina)_\n\n`;
+      message += `• *r* → Resumo do dia\n`;
+      message += `• *m* → Ver meta semanal\n\n`;
+
+      message += `👉 Digite *oi* ou *menu* a qualquer momento!`;
 
       await this.sendMessage(session.phone, message);
       session.state = ConversationState.IDLE;
@@ -1148,12 +1288,19 @@ ${result.message}`;
     const message = `👋 ${greeting}
 
 ⚡ *COMANDOS RÁPIDOS:*
-• \`45 12\` → Registrar corrida (R$45, 12km)
-• \`vale 45 12\` ou \`v 45 12\` → Vale a pena? 🤔
-• \`g80\` → Combustível R$80
-• \`r\` → Ver resumo do dia
-• \`m\` → Ver meta semanal
-• \`g\` → Ver gráficos 📊
+
+• *45 12* → Registrar corrida
+  _(R$45 ganhos, 12km rodados)_
+
+• *vale 45 12* → Vale a pena? 🤔
+  _(avaliar corrida antes de aceitar)_
+
+• *g80* → Combustível
+  _(R$80 de gasolina)_
+
+• *r* → Resumo do dia
+• *m* → Ver meta semanal
+• *g* → Ver gráficos 📊
 
 📊 *Ou escolha uma opção:*`;
 

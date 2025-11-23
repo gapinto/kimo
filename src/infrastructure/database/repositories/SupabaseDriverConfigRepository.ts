@@ -14,6 +14,9 @@ interface DriverConfigRow {
   avg_fuel_price: number;
   avg_km_per_day: number;
   work_days_per_week: number;
+  financing_balance: number | null;
+  financing_monthly_payment: number | null;
+  financing_remaining_months: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -143,6 +146,9 @@ export class SupabaseDriverConfigRepository implements IDriverConfigRepository {
       avgFuelPrice: Money.create(row.avg_fuel_price),
       avgKmPerDay: row.avg_km_per_day,
       workDaysPerWeek: row.work_days_per_week,
+      financingBalance: row.financing_balance ? Money.create(row.financing_balance) : undefined,
+      financingMonthlyPayment: row.financing_monthly_payment ? Money.create(row.financing_monthly_payment) : undefined,
+      financingRemainingMonths: row.financing_remaining_months ?? undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     });
@@ -158,6 +164,9 @@ export class SupabaseDriverConfigRepository implements IDriverConfigRepository {
       avg_fuel_price: config.avgFuelPrice.value,
       avg_km_per_day: config.avgKmPerDay,
       work_days_per_week: config.workDaysPerWeek,
+      financing_balance: config.financingBalance?.value ?? null,
+      financing_monthly_payment: config.financingMonthlyPayment?.value ?? null,
+      financing_remaining_months: config.financingRemainingMonths ?? null,
       created_at: config.createdAt.toISOString(),
       updated_at: config.updatedAt.toISOString(),
     };
