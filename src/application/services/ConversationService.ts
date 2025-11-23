@@ -919,7 +919,7 @@ Ou responda: *Quanto você ganhou nesta corrida?*
       today.setHours(0, 0, 0, 0);
 
       // Buscar resumo diário
-      const summary = await this.dailySummaryRepository.findByUserIdAndDate(
+      const summary = await this.dailySummaryRepository.findByUserAndDate(
         session.userId,
         today
       );
