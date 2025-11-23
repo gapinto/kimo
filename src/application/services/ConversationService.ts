@@ -311,6 +311,14 @@ export class ConversationService {
         await this.handleQuickRegister(session, quickRegisterMatch);
         return;
       }
+
+      // COMANDO RÁPIDO PARA DESPESAS: g80, m150, p12, etc
+      const quickExpenseMatch = text.match(/^([gmpel])(\d+(?:[.,]\d+)?)(?:\s+(.+))?$/i);
+      
+      if (quickExpenseMatch) {
+        await this.handleQuickExpense(session, quickExpenseMatch);
+        return;
+      }
       
       // Processar comando (texto, número ou ID de botão)
       if (
@@ -705,6 +713,105 @@ Digite o número ou o nome do comando!`;
     }
   }
 
+  /**
+   * Registra despesa rapidamente: "g80", "m150 reparo freio"
+   */
+  private async handleQuickExpense(
+    session: ConversationSession,
+    match: RegExpMatchArray
+  ): Promise<void> {
+    try {
+      if (!session.userId) {
+        throw new Error('User ID not found');
+      }
+
+      const typeCode = match[1]!.toLowerCase();
+      const amount = parseFloat(match[2]!.replace(',', '.'));
+      const description = match[3] ? match[3].trim() : undefined;
+
+      // Validar
+      if (isNaN(amount) || amount <= 0) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Valor inválido.\n\nExemplos:\ng80 → Combustível R$80\nm150 reparo freio → Manutenção R$150'
+        );
+        return;
+      }
+
+      // Mapear código para tipo de despesa
+      let expenseType: ExpenseType;
+      let typeName: string;
+
+      switch (typeCode) {
+        case 'g':
+          expenseType = ExpenseType.FUEL;
+          typeName = 'Combustível';
+          break;
+        case 'm':
+          expenseType = ExpenseType.MAINTENANCE_CORRECTIVE;
+          typeName = 'Manutenção';
+          break;
+        case 'p':
+          expenseType = ExpenseType.TOLL;
+          typeName = 'Pedágio';
+          break;
+        case 'e':
+          expenseType = ExpenseType.PARKING;
+          typeName = 'Estacionamento';
+          break;
+        case 'l':
+          expenseType = ExpenseType.CLEANING;
+          typeName = 'Lavagem';
+          break;
+        default:
+          await this.sendMessage(
+            session.phone,
+            '❌ Código inválido.\n\nUse:\ng = Gasolina\nm = Manutenção\np = Pedágio\ne = Estacionamento\nl = Lavagem'
+          );
+          return;
+      }
+
+      // Montar mensagem de confirmação
+      let confirmMessage = `✅ *Confirme a despesa:*\n\n`;
+      confirmMessage += `📋 Tipo: ${typeName}\n`;
+      confirmMessage += `💸 Valor: R$ ${amount.toFixed(2)}\n`;
+      
+      if (description) {
+        confirmMessage += `📝 Descrição: ${description}\n`;
+      }
+      
+      confirmMessage += `\n*Está correto?*\n\n`;
+      confirmMessage += `Digite:\n`;
+      confirmMessage += `✅ *sim* para salvar\n`;
+      confirmMessage += `❌ *não* para cancelar`;
+
+      // Salvar dados temporários na sessão
+      session.data.quickExpenseConfirmation = {
+        type: expenseType,
+        typeName,
+        amount,
+        description,
+      };
+
+      session.state = ConversationState.REGISTER_CONFIRM;
+
+      await this.sendMessage(session.phone, confirmMessage);
+
+      logger.info('Quick expense pending confirmation', {
+        userId: session.userId,
+        type: expenseType,
+        amount,
+        description,
+      });
+    } catch (error) {
+      logger.error('Error in quick expense', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao processar.\n\nExemplos:\ng80 → Combustível\nm150 reparo → Manutenção'
+      );
+    }
+  }
+
   private async startExpenseRegistration(session: ConversationSession): Promise<void> {
     const message = `⛽ *Registrar Despesa*
 
@@ -1062,6 +1169,14 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
       return;
     }
 
+    // Verificar se é confirmação de despesa rápida
+    const quickExpense = session.data.quickExpenseConfirmation as any;
+    
+    if (quickExpense) {
+      await this.saveQuickExpense(session, quickExpense);
+      return;
+    }
+
     // Caso contrário, fluxo normal (registro passo a passo)
     await this.saveNormalRegister(session);
   }
@@ -1115,6 +1230,57 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
       await this.sendMessage(
         session.phone,
         '❌ Erro ao salvar. Tente novamente.'
+      );
+      session.state = ConversationState.IDLE;
+    }
+  }
+
+  /**
+   * Salva despesa rápida confirmada
+   */
+  private async saveQuickExpense(session: ConversationSession, data: any): Promise<void> {
+    try {
+      if (!session.userId) {
+        throw new Error('User ID not found');
+      }
+
+      const { type, typeName, amount, description } = data;
+
+      // Registrar despesa
+      const registerExpense = new RegisterExpense(this.expenseRepository);
+      await registerExpense.execute({
+        userId: session.userId,
+        amount: Money.create(amount),
+        type,
+        description,
+        date: new Date(),
+      });
+
+      let message = `✅ *Despesa salva!*\n\n`;
+      message += `📋 ${typeName}\n`;
+      message += `💸 R$ ${amount.toFixed(2)}`;
+      
+      if (description) {
+        message += `\n📝 ${description}`;
+      }
+
+      message += `\n\n💡 *Atalhos:*\n`;
+      message += `g80 = Gasolina\n`;
+      message += `m150 reparo = Manutenção\n`;
+      message += `p12 = Pedágio`;
+
+      await this.sendMessage(session.phone, message);
+
+      // Limpar sessão
+      session.state = ConversationState.IDLE;
+      session.data.quickExpenseConfirmation = undefined;
+
+      logger.info('Quick expense saved', { userId: session.userId, type, amount, description });
+    } catch (error) {
+      logger.error('Error saving quick expense', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao salvar despesa. Tente novamente.'
       );
       session.state = ConversationState.IDLE;
     }

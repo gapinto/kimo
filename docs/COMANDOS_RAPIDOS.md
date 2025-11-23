@@ -31,47 +31,52 @@
 
 ## 📋 **TODOS OS COMANDOS DISPONÍVEIS:**
 
-### **1️⃣ Registro de Corrida (3 formatos):**
+### **1️⃣ Registro de Corrida (ULTRA-RÁPIDO):**
 
-#### **A) Comando Rápido (MAIS RÁPIDO):**
 ```
-45 12          → Registra R$45 e 12km
-67.50 18       → Registra R$67,50 e 18km
-30 8 15        → Registra R$30, 8km e R$15 de combustível
-```
-
-#### **B) Modo Guiado:**
-```
-Digite: 1  ou  registrar
-→ KIMO pergunta passo a passo
+45 12          → R$ 45, 12 km
+67.50 18       → R$ 67,50, 18 km
+30 8 15        → R$ 30, 8 km + R$ 15 combustível
 ```
 
-#### **C) Comando por Texto:**
+**Confirma antes de salvar!** ✅
+
+---
+
+### **2️⃣ Registro de Despesas (COM DESCRIÇÃO):**
+
+#### **Formato:** `[código][valor] [descrição opcional]`
+
 ```
-Digite: /corrida 45 12
-→ Registra R$45 e 12km
+g80              → Gasolina R$ 80
+m150             → Manutenção R$ 150
+m150 reparo freio → Manutenção R$ 150 + "reparo freio"
+p12              → Pedágio R$ 12
+e15              → Estacionamento R$ 15
+l30              → Lavagem R$ 30
+```
+
+**Códigos:**
+- **g** = Gasolina/Combustível
+- **m** = Manutenção
+- **p** = Pedágio
+- **e** = Estacionamento
+- **l** = Lavagem
+
+**Também confirma antes de salvar!** ✅
+
+---
+
+### **3️⃣ Modo Guiado (passo a passo):**
+
+```
+1  ou  registrar  → Guia para registrar corrida
+2  ou  despesa    → Guia para registrar despesa
 ```
 
 ---
 
-### **2️⃣ Registro de Despesas:**
-
-```
-Digite: 2  ou  despesa
-→ KIMO pergunta tipo e valor
-```
-
-**Ou comandos rápidos:**
-```
-/gasolina 80    → Abastecimento R$80
-/manutencao 150 → Manutenção R$150
-/pedagio 12     → Pedágio R$12
-/lavagem 30     → Lavagem R$30
-```
-
----
-
-### **3️⃣ Consultas:**
+### **4️⃣ Consultas:**
 
 ```
 3  ou  resumo     → Ver resumo do dia
@@ -141,30 +146,41 @@ No semáforo ou aguardando passageiro:
 ### **Cenário 1: Corrida curta**
 ```
 Motorista: 25 5
-KIMO: ✅ Corrida registrada!
-      💰 R$ 25,00
-      🚗 5 km
+KIMO: ✅ Confirme: R$ 25, 5km. Correto? (sim/não)
+Motorista: sim
+KIMO: ✅ Corrida salva!
 ```
 
-### **Cenário 2: Corrida longa com combustível**
+### **Cenário 2: Corrida com combustível**
 ```
 Motorista: 85 45 20
-KIMO: ✅ Corrida registrada!
-      💰 R$ 85,00
-      🚗 45 km
-      ⛽ R$ 20,00 combustível
+KIMO: ✅ Confirme: R$ 85, 45km, R$ 20 combustível. Correto?
+Motorista: sim
+KIMO: ✅ Corrida salva!
 ```
 
-### **Cenário 3: Várias corridas no dia**
+### **Cenário 3: Manutenção com descrição**
+```
+Motorista: m150 troca de óleo
+KIMO: ✅ Confirme:
+      📋 Manutenção
+      💸 R$ 150
+      📝 troca de óleo
+      Correto? (sim/não)
+Motorista: sim
+KIMO: ✅ Despesa salva!
+```
+
+### **Cenário 4: Várias corridas no dia**
 ```
 10h: 30 8
 11h: 45 12
-13h: 60 25
+13h: g80       ← abasteceu
 15h: 40 10
 17h: 55 18
 
 Fim do dia: resumo
-→ Total: R$ 230 / 73km / Lucro: R$ X
+→ Total: R$ 170 / 48km / -R$ 80 gasolina = R$ 90 lucro
 ```
 
 ---
