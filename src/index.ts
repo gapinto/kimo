@@ -1,6 +1,8 @@
-import { createServer } from './infrastructure/http/server';
+import { createServer, initializeScheduler } from './infrastructure/http/server';
 import { env } from './shared/utils/env';
 import { logger } from './shared/utils/logger';
+
+let schedulerService: any;
 
 /**
  * Entry point da aplicação
@@ -16,10 +18,14 @@ async function bootstrap(): Promise<void> {
     // Criar servidor
     const app = createServer();
 
+    // Inicializar scheduler (mensagens automáticas)
+    schedulerService = initializeScheduler();
+
     // Iniciar servidor
     app.listen(env.port, () => {
       logger.info(`🚀 Server is running on port ${env.port}`);
       logger.info(`📋 Environment: ${env.nodeEnv}`);
+      logger.info(`⏰ Scheduler started`);
       logger.info(`🏥 Health check: http://localhost:${env.port}/health`);
     });
   } catch (error) {
@@ -31,11 +37,17 @@ async function bootstrap(): Promise<void> {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('SIGTERM signal received: closing HTTP server');
+  if (schedulerService) {
+    schedulerService.stop();
+  }
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   logger.info('SIGINT signal received: closing HTTP server');
+  if (schedulerService) {
+    schedulerService.stop();
+  }
   process.exit(0);
 });
 
@@ -44,4 +56,5 @@ bootstrap().catch((error) => {
   logger.error('Bootstrap failed', error);
   process.exit(1);
 });
+
 

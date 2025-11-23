@@ -18,6 +18,11 @@ export interface IUserRepository {
   findById(id: string): Promise<User | null>;
 
   /**
+   * Busca todos os usuários (para mensagens automáticas)
+   */
+  findAll(): Promise<User[]>;
+
+  /**
    * Salva um novo usuário
    */
   save(user: User): Promise<void>;

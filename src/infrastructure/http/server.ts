@@ -2,6 +2,12 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import { AppError } from '../../shared/errors/AppError';
 import { logger } from '../../shared/utils/logger';
 import { createWhatsAppRoutes } from './routes/whatsapp.routes';
+import { SchedulerService } from '../../application/services/SchedulerService';
+import { getSupabaseClient } from '../database/supabase.client';
+import { SupabaseUserRepository } from '../database/repositories/SupabaseUserRepository';
+import { SupabaseDailySummaryRepository } from '../database/repositories/SupabaseDailySummaryRepository';
+import { EvolutionAPIProvider } from '../messaging/EvolutionAPIProvider';
+import { env } from '../../shared/utils/env';
 
 /**
  * Cria e configura o servidor Express
@@ -63,5 +69,31 @@ export function createServer(): Express {
   });
 
   return app;
+}
+
+/**
+ * Inicializa o serviço de agendamento
+ */
+export function initializeScheduler(): SchedulerService {
+  const supabase = getSupabaseClient();
+  
+  const userRepository = new SupabaseUserRepository(supabase);
+  const dailySummaryRepository = new SupabaseDailySummaryRepository(supabase);
+  
+  const messagingProvider = new EvolutionAPIProvider({
+    apiUrl: env.whatsapp.evolutionApiUrl,
+    apiKey: env.whatsapp.evolutionApiKey,
+    instanceName: env.whatsapp.evolutionInstanceName,
+  });
+
+  const scheduler = new SchedulerService(
+    userRepository,
+    dailySummaryRepository,
+    messagingProvider
+  );
+
+  scheduler.start();
+  
+  return scheduler;
 }
 

@@ -76,6 +76,45 @@ export class SupabaseUserRepository implements IUserRepository {
     }
   }
 
+  async findAll(): Promise<User[]> {
+    try {
+      const { data, error } = await this.client
+        .from(this.tableName)
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw new DatabaseError('Failed to find all users', error);
+      }
+
+      return data ? data.map((row) => this.toDomain(row as UserRow)) : [];
+    } catch (error) {
+      if (error instanceof DatabaseError) {
+        throw error;
+      }
+      throw new DatabaseError('Unexpected error finding all users', error);
+    }
+  }
+
+  async save(user: User): Promise<void> {
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return null;
+        }
+        throw new DatabaseError('Failed to find user by id', error);
+      }
+
+      return data ? this.toDomain(data as UserRow) : null;
+    } catch (error) {
+      if (error instanceof DatabaseError) {
+        throw error;
+      }
+      throw new DatabaseError('Unexpected error finding user by id', error);
+    }
+  }
+
   async save(user: User): Promise<void> {
     try {
       const row = this.toRow(user);
