@@ -303,6 +303,14 @@ export class ConversationService {
     } else {
       // Usuário existente - mostrar menu
       session.userId = existingUser.id;
+
+      // COMANDO RÁPIDO: detectar formato "45 12" ou "45 12 5"
+      const quickRegisterMatch = normalizedText.match(/^(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)(?:\s+(\d+(?:[.,]\d+)?))?$/);
+      
+      if (quickRegisterMatch) {
+        await this.handleQuickRegister(session, quickRegisterMatch);
+        return;
+      }
       
       // Processar comando (texto, número ou ID de botão)
       if (
@@ -312,20 +320,26 @@ export class ConversationService {
       ) {
         await this.startRegistration(session);
       } else if (
-        normalizedText.includes('resumo') ||
+        normalizedText.includes('despesa') ||
         normalizedText === '2' ||
+        normalizedText === 'despesa'
+      ) {
+        await this.startExpenseRegistration(session);
+      } else if (
+        normalizedText.includes('resumo') ||
+        normalizedText === '3' ||
         normalizedText === 'resumo'
       ) {
         await this.showSummary(session);
       } else if (
         normalizedText.includes('meta') ||
-        normalizedText === '3' ||
+        normalizedText === '4' ||
         normalizedText === 'meta'
       ) {
         await this.showWeeklyProgress(session);
       } else if (
         normalizedText.includes('insights') ||
-        normalizedText === '4' ||
+        normalizedText === '5' ||
         normalizedText === 'insights'
       ) {
         await this.showInsights(session);
@@ -631,12 +645,91 @@ Digite o número ou o nome do comando!`;
   }
 
   // Métodos auxiliares
+  /**
+   * Registra corrida rapidamente: "45 12" ou "45 12 5"
+   */
+  private async handleQuickRegister(
+    session: ConversationSession,
+    match: RegExpMatchArray
+  ): Promise<void> {
+    try {
+      if (!session.userId) {
+        throw new Error('User ID not found');
+      }
+
+      const earnings = parseFloat(match[1]!.replace(',', '.'));
+      const km = parseFloat(match[2]!.replace(',', '.'));
+      const fuel = match[3] ? parseFloat(match[3].replace(',', '.')) : undefined;
+
+      // Validar
+      if (isNaN(earnings) || isNaN(km) || earnings <= 0 || km <= 0) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Valores inválidos. Use: VALOR KM\nExemplo: 45 12'
+        );
+        return;
+      }
+
+      // Montar mensagem de confirmação
+      let confirmMessage = `✅ *Confirme os dados:*\n\n`;
+      confirmMessage += `💰 Ganho: R$ ${earnings.toFixed(2)}\n`;
+      confirmMessage += `🚗 KM: ${km} km\n`;
+      
+      if (fuel && fuel > 0 && !isNaN(fuel)) {
+        confirmMessage += `⛽ Combustível: R$ ${fuel.toFixed(2)}\n`;
+      }
+      
+      confirmMessage += `\n*Está correto?*\n\n`;
+      confirmMessage += `Digite:\n`;
+      confirmMessage += `✅ *sim* para salvar\n`;
+      confirmMessage += `❌ *não* para cancelar`;
+
+      // Salvar dados temporários na sessão para confirmar depois
+      session.data.quickRegisterConfirmation = {
+        earnings,
+        km,
+        fuel,
+      };
+
+      session.state = ConversationState.REGISTER_CONFIRM;
+
+      await this.sendMessage(session.phone, confirmMessage);
+
+      logger.info('Quick register pending confirmation', { userId: session.userId, earnings, km, fuel });
+    } catch (error) {
+      logger.error('Error in quick register', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao processar. Use: VALOR KM\nExemplo: 45 12'
+      );
+    }
+  }
+
+  private async startExpenseRegistration(session: ConversationSession): Promise<void> {
+    const message = `⛽ *Registrar Despesa*
+
+*Qual tipo de despesa?*
+
+1. ⛽ Combustível
+2. 🔧 Manutenção
+3. 🅿️ Estacionamento
+4. 🚧 Pedágio
+5. 🧼 Lavagem
+6. 🔄 Outro
+
+Digite o número:`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.REGISTER_FUEL; // Reutilizar estado
+    session.data.registration = { selectingExpenseType: true };
+  }
+
   private async startRegistration(session: ConversationSession): Promise<void> {
-    const message = `📝 *Vamos registrar seu dia!*
+    const message = `🚗 *Registrar Corrida*
 
-*Quanto você ganhou hoje?*
+*Quanto você ganhou nesta corrida?*
 
-Digite apenas o valor em reais (ex: 280):`;
+Digite apenas o valor em reais (ex: 45):`;
 
     await this.sendMessage(session.phone, message);
     session.state = ConversationState.REGISTER_EARNINGS;
@@ -756,7 +849,8 @@ ${result.message}`;
 📊 *O que deseja fazer?*`;
 
     const buttons = [
-      { id: 'registrar', text: '📝 Registrar corrida' },
+      { id: 'registrar', text: '🚗 Registrar corrida' },
+      { id: 'despesa', text: '⛽ Registrar despesa' },
       { id: 'resumo', text: '📈 Ver resumo' },
       { id: 'meta', text: '🎯 Ver meta semanal' },
     ];
@@ -783,7 +877,7 @@ ${result.message}`;
     if (!earnings || earnings < 0) {
       await this.sendMessage(
         session.phone,
-        '❌ Valor inválido. Digite apenas o valor em reais (ex: 280):'
+        '❌ Valor inválido. Digite apenas o valor (ex: 45):'
       );
       return;
     }
@@ -791,11 +885,11 @@ ${result.message}`;
     const currentReg = (session.data.registration as Record<string, any>) || {};
     session.data.registration = { ...currentReg, earnings };
 
-    const message = `✅ R$ ${earnings.toFixed(2)} de ganhos
+    const message = `✅ R$ ${earnings.toFixed(2)}
 
-*Quantos KM você rodou hoje?*
+*Quantos KM rodou nesta corrida?*
 
-Digite apenas o número (ex: 150):`;
+Digite apenas o número (ex: 12):`;
 
     await this.sendMessage(session.phone, message);
     session.state = ConversationState.REGISTER_KM;
@@ -807,7 +901,7 @@ Digite apenas o número (ex: 150):`;
     if (!km || km < 0) {
       await this.sendMessage(
         session.phone,
-        '❌ Valor inválido. Digite apenas o número de KM (ex: 150):'
+        '❌ Valor inválido. Digite apenas o número de KM (ex: 12):'
       );
       return;
     }
@@ -815,14 +909,63 @@ Digite apenas o número (ex: 150):`;
     const currentReg = (session.data.registration as Record<string, any>) || {};
     session.data.registration = { ...currentReg, km };
 
-    const message = `✅ ${km} km rodados
+    // Salvar corrida imediatamente
+    await this.saveTripAndAskNext(session);
+  }
 
-*Quanto gastou com combustível?*
+  /**
+   * Salva a corrida e pergunta se quer registrar outra ou despesa
+   */
+  private async saveTripAndAskNext(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        throw new Error('User ID not found');
+      }
 
-Digite apenas o valor (ex: 70):`;
+      const reg = session.data.registration as Record<string, any>;
 
-    await this.sendMessage(session.phone, message);
-    session.state = ConversationState.REGISTER_FUEL;
+      // 1. Registrar viagem
+      const registerTrip = new RegisterTrip(this.tripRepository);
+      await registerTrip.execute({
+        userId: session.userId,
+        earnings: Money.create(reg.earnings),
+        km: reg.km,
+        date: new Date(),
+      });
+
+      logger.info('Trip registered successfully', {
+        userId: session.userId,
+        earnings: reg.earnings,
+        km: reg.km,
+      });
+
+      // 2. Mensagem de sucesso e próximas opções
+      const message = `✅ *Corrida registrada!*
+
+💰 Ganho: R$ ${reg.earnings.toFixed(2)}
+🚗 KM: ${reg.km} km
+
+*O que deseja fazer agora?*
+
+1. 🚗 Registrar outra corrida
+2. ⛽ Registrar despesa (combustível, etc)
+3. 📊 Ver resumo do dia
+
+Digite o número (1, 2 ou 3):`;
+
+      await this.sendMessage(session.phone, message);
+
+      // Resetar dados de registro
+      session.data.registration = {};
+      session.state = ConversationState.IDLE;
+    } catch (error) {
+      logger.error('Error saving trip', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao salvar corrida. Tente novamente.'
+      );
+      session.state = ConversationState.IDLE;
+    }
   }
 
   private async handleRegisterFuel(session: ConversationSession, text: string): Promise<void> {
@@ -891,23 +1034,96 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
     session: ConversationSession,
     text: string
   ): Promise<void> {
-    const option = text.trim();
+    const option = text.trim().toLowerCase();
 
-    if (option === '2' || text.toLowerCase().includes('não') || text.toLowerCase().includes('nao')) {
+    // Cancelar
+    if (option === '2' || option.includes('não') || option.includes('nao') || option === 'n') {
       await this.sendMessage(session.phone, '❌ Registro cancelado.');
       session.state = ConversationState.IDLE;
       session.data.registration = {};
+      session.data.quickRegisterConfirmation = undefined;
       return;
     }
 
-    if (option !== '1' && !text.toLowerCase().includes('sim')) {
+    // Validar confirmação
+    if (option !== '1' && !option.includes('sim') && option !== 's') {
       await this.sendMessage(
         session.phone,
-        '❌ Opção inválida. Digite 1 para confirmar ou 2 para cancelar:'
+        '❌ Opção inválida. Digite *sim* ou *não*:'
       );
       return;
     }
 
+    // Verificar se é confirmação de registro rápido
+    const quickReg = session.data.quickRegisterConfirmation as any;
+    
+    if (quickReg) {
+      await this.saveQuickRegister(session, quickReg);
+      return;
+    }
+
+    // Caso contrário, fluxo normal (registro passo a passo)
+    await this.saveNormalRegister(session);
+  }
+
+  /**
+   * Salva registro rápido confirmado
+   */
+  private async saveQuickRegister(session: ConversationSession, data: any): Promise<void> {
+    try {
+      if (!session.userId) {
+        throw new Error('User ID not found');
+      }
+
+      const { earnings, km, fuel } = data;
+
+      // 1. Registrar viagem
+      const registerTrip = new RegisterTrip(this.tripRepository);
+      await registerTrip.execute({
+        userId: session.userId,
+        earnings: Money.create(earnings),
+        km,
+        date: new Date(),
+      });
+
+      let message = `✅ *Corrida salva!*\n\n💰 R$ ${earnings.toFixed(2)}\n🚗 ${km} km`;
+
+      // 2. Registrar combustível se informado
+      if (fuel && fuel > 0) {
+        const registerExpense = new RegisterExpense(this.expenseRepository);
+        await registerExpense.execute({
+          userId: session.userId,
+          amount: Money.create(fuel),
+          type: ExpenseType.FUEL,
+          date: new Date(),
+        });
+
+        message += `\n⛽ R$ ${fuel.toFixed(2)} combustível`;
+      }
+
+      message += `\n\n💡 *Dica:* Digite só os números para registrar rápido!\nExemplo: 45 12`;
+
+      await this.sendMessage(session.phone, message);
+
+      // Limpar sessão
+      session.state = ConversationState.IDLE;
+      session.data.quickRegisterConfirmation = undefined;
+
+      logger.info('Quick trip saved', { userId: session.userId, earnings, km, fuel });
+    } catch (error) {
+      logger.error('Error saving quick register', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao salvar. Tente novamente.'
+      );
+      session.state = ConversationState.IDLE;
+    }
+  }
+
+  /**
+   * Salva registro normal (passo a passo)
+   */
+  private async saveNormalRegister(session: ConversationSession): Promise<void> {
     // Salvar dados
     try {
       if (!session.userId) {
