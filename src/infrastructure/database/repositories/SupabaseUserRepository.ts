@@ -97,25 +97,6 @@ export class SupabaseUserRepository implements IUserRepository {
   }
 
   async save(user: User): Promise<void> {
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          return null;
-        }
-        throw new DatabaseError('Failed to find user by id', error);
-      }
-
-      return data ? this.toDomain(data as UserRow) : null;
-    } catch (error) {
-      if (error instanceof DatabaseError) {
-        throw error;
-      }
-      throw new DatabaseError('Unexpected error finding user by id', error);
-    }
-  }
-
-  async save(user: User): Promise<void> {
     try {
       const row = this.toRow(user);
 
