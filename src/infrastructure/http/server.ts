@@ -3,7 +3,7 @@ import { AppError } from '../../shared/errors/AppError';
 import { logger } from '../../shared/utils/logger';
 import { createWhatsAppRoutes } from './routes/whatsapp.routes';
 import { SchedulerService } from '../../application/services/SchedulerService';
-import { supabase } from '../database/supabase';
+import { supabase } from '../database/supabase.client';
 import { SupabaseUserRepository } from '../database/repositories/SupabaseUserRepository';
 import { SupabaseDailySummaryRepository } from '../database/repositories/SupabaseDailySummaryRepository';
 import { EvolutionAPIProvider } from '../messaging/EvolutionAPIProvider';
