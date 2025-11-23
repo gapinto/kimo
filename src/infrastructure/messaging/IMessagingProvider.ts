@@ -12,6 +12,12 @@ export interface SendMessageInput {
   };
 }
 
+export interface SendImageInput {
+  to: string;
+  imageUrl: string;
+  caption?: string;
+}
+
 export interface SendMessageOutput {
   messageId: string;
   success: boolean;
@@ -22,6 +28,11 @@ export interface IMessagingProvider {
    * Envia mensagem de texto
    */
   sendTextMessage(input: SendMessageInput): Promise<SendMessageOutput>;
+
+  /**
+   * Envia imagem via URL
+   */
+  sendImageMessage(input: SendImageInput): Promise<SendMessageOutput>;
 
   /**
    * Envia mensagem com botões (opcional, nem todos providers suportam)

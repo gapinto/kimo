@@ -23,6 +23,7 @@ import {
 } from './ConversationTypes';
 import { AudioTranscriptionService } from './AudioTranscriptionService';
 import { NLPService } from './NLPService';
+import { ChartService } from './ChartService';
 import { logger } from '../../shared/utils/logger';
 
 /**
@@ -35,6 +36,7 @@ export class ConversationService {
   private sessions: Map<string, ConversationSession> = new Map();
   private audioTranscriptionService?: AudioTranscriptionService;
   private nlpService?: NLPService;
+  private chartService: ChartService;
 
   constructor(
     private readonly messagingProvider: IMessagingProvider,
@@ -54,6 +56,9 @@ export class ConversationService {
     if (deepseekApiKey) {
       this.nlpService = new NLPService(deepseekApiKey);
     }
+    
+    // Inicializar ChartService
+    this.chartService = new ChartService();
   }
 
   /**
@@ -392,6 +397,16 @@ export class ConversationService {
         normalizedText === 'i'
       ) {
         await this.showInsights(session);
+      } else if (normalizedText === 'grafico' || normalizedText === 'gráfico' || normalizedText === 'g') {
+        await this.showChartMenu(session);
+      } else if (normalizedText === 'g1' || normalizedText === 'grafico semana') {
+        await this.sendWeeklyProgressChart(session);
+      } else if (normalizedText === 'g2' || normalizedText === 'grafico lucro') {
+        await this.sendProfitTrendChart(session);
+      } else if (normalizedText === 'g3' || normalizedText === 'grafico despesas') {
+        await this.sendExpensesPieChart(session);
+      } else if (normalizedText === 'g4' || normalizedText === 'grafico meta') {
+        await this.sendGoalProgressChart(session);
       } else {
         // Menu principal
         await this.showMainMenu(session, existingUser.name);
@@ -1085,6 +1100,7 @@ ${result.message}`;
 • \`g80\` → Combustível R$80
 • \`r\` → Ver resumo do dia
 • \`m\` → Ver meta semanal
+• \`g\` → Ver gráficos 📊
 
 📊 *Ou escolha uma opção:*`;
 
@@ -1568,6 +1584,293 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
 
   private resetSession(phone: string): void {
     this.sessions.delete(phone);
+  }
+
+  // ============================================
+  // MÉTODOS DE GRÁFICOS
+  // ============================================
+
+  /**
+   * Mostra menu de gráficos disponíveis
+   */
+  private async showChartMenu(session: ConversationSession): Promise<void> {
+    const message = `📊 *GRÁFICOS DISPONÍVEIS*
+
+Escolha um gráfico:
+
+📈 *g1* ou *grafico semana*
+Progresso Semanal (barras)
+
+📉 *g2* ou *grafico lucro*
+Evolução do Lucro (linha)
+
+🥧 *g3* ou *grafico despesas*
+Despesas por Tipo (pizza)
+
+🎯 *g4* ou *grafico meta*
+Progresso da Meta (medidor)
+
+Digite o código ou comando:`;
+
+    await this.sendMessage(session.phone, message);
+  }
+
+  /**
+   * Envia gráfico de progresso semanal
+   */
+  private async sendWeeklyProgressChart(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      await this.sendMessage(session.phone, '📊 Gerando gráfico...');
+
+      const today = new Date();
+      const startDate = new Date(today);
+      startDate.setDate(today.getDate() - 6); // Últimos 7 dias
+
+      const summaries = await this.dailySummaryRepository.findByUserAndDateRange(
+        session.userId,
+        startDate,
+        today
+      );
+
+      if (summaries.length === 0) {
+        await this.sendMessage(
+          session.phone,
+          '📭 Não há dados suficientes para gerar o gráfico. Registre algumas corridas primeiro!'
+        );
+        return;
+      }
+
+      const labels: string[] = [];
+      const earnings: number[] = [];
+      const expenses: number[] = [];
+      const profit: number[] = [];
+
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + i);
+        const dayName = date.toLocaleDateString('pt-BR', { weekday: 'short' });
+        labels.push(dayName);
+
+        const summary = summaries.find(
+          (s) => s.date.toDateString() === date.toDateString()
+        );
+
+        earnings.push(summary ? summary.earnings.value : 0);
+        expenses.push(summary ? summary.expenses.value : 0);
+        profit.push(summary ? summary.profit.value : 0);
+      }
+
+      const chartUrl = this.chartService.generateWeeklyProgressChart({
+        labels,
+        earnings,
+        expenses,
+        profit,
+      });
+
+      await this.messagingProvider.sendImageMessage({
+        to: session.phone,
+        imageUrl: chartUrl,
+        caption: '📊 *Progresso Semanal*\nGanhos, Despesas e Lucro dos últimos 7 dias',
+      });
+    } catch (error) {
+      logger.error('Error sending weekly progress chart', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao gerar gráfico. Tente novamente.'
+      );
+    }
+  }
+
+  /**
+   * Envia gráfico de evolução de lucro
+   */
+  private async sendProfitTrendChart(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      await this.sendMessage(session.phone, '📉 Gerando gráfico...');
+
+      const today = new Date();
+      const startDate = new Date(today);
+      startDate.setDate(today.getDate() - 13); // Últimos 14 dias
+
+      const summaries = await this.dailySummaryRepository.findByUserAndDateRange(
+        session.userId,
+        startDate,
+        today
+      );
+
+      if (summaries.length === 0) {
+        await this.sendMessage(
+          session.phone,
+          '📭 Não há dados suficientes para gerar o gráfico.'
+        );
+        return;
+      }
+
+      const user = await this.userRepository.findById(session.userId);
+
+      const labels: string[] = [];
+      const profit: number[] = [];
+
+      summaries.forEach((summary) => {
+        labels.push(summary.date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+        profit.push(summary.profit.value);
+      });
+
+      const chartUrl = this.chartService.generateProfitTrendChart({
+        labels,
+        profit,
+        goal: user?.weeklyGoal,
+      });
+
+      await this.messagingProvider.sendImageMessage({
+        to: session.phone,
+        imageUrl: chartUrl,
+        caption: '📈 *Evolução do Lucro*\nÚltimos 14 dias',
+      });
+    } catch (error) {
+      logger.error('Error sending profit trend chart', error);
+      await this.sendMessage(session.phone, '❌ Erro ao gerar gráfico.');
+    }
+  }
+
+  /**
+   * Envia gráfico de despesas por tipo
+   */
+  private async sendExpensesPieChart(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      await this.sendMessage(session.phone, '🥧 Gerando gráfico...');
+
+      const today = new Date();
+      const startDate = new Date(today);
+      startDate.setDate(today.getDate() - 6); // Últimos 7 dias
+
+      const expenses = await this.expenseRepository.findByUserAndDateRange(
+        session.userId,
+        startDate,
+        today
+      );
+
+      if (expenses.length === 0) {
+        await this.sendMessage(
+          session.phone,
+          '📭 Não há despesas registradas nos últimos 7 dias.'
+        );
+        return;
+      }
+
+      // Agrupar por tipo
+      const expensesByType: Map<string, number> = new Map();
+
+      expenses.forEach((expense) => {
+        const current = expensesByType.get(expense.type) || 0;
+        expensesByType.set(expense.type, current + expense.amount.value);
+      });
+
+      const labels: string[] = [];
+      const values: number[] = [];
+
+      expensesByType.forEach((value, type) => {
+        labels.push(this.getExpenseTypeLabel(type));
+        values.push(value);
+      });
+
+      const chartUrl = this.chartService.generateExpensesPieChart({
+        labels,
+        values,
+      });
+
+      await this.messagingProvider.sendImageMessage({
+        to: session.phone,
+        imageUrl: chartUrl,
+        caption: '🥧 *Despesas por Tipo*\nÚltimos 7 dias',
+      });
+    } catch (error) {
+      logger.error('Error sending expenses pie chart', error);
+      await this.sendMessage(session.phone, '❌ Erro ao gerar gráfico.');
+    }
+  }
+
+  /**
+   * Envia gráfico de progresso da meta
+   */
+  private async sendGoalProgressChart(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      await this.sendMessage(session.phone, '🎯 Gerando gráfico...');
+
+      const user = await this.userRepository.findById(session.userId);
+
+      if (!user?.weeklyGoal) {
+        await this.sendMessage(
+          session.phone,
+          '⚠️ Você ainda não definiu uma meta semanal!'
+        );
+        return;
+      }
+
+      const getWeeklyProgress = new GetWeeklyProgress(
+        this.userRepository,
+        this.dailySummaryRepository
+      );
+
+      const progress = await getWeeklyProgress.execute({
+        userId: session.userId,
+        referenceDate: new Date(),
+      });
+
+      const chartUrl = this.chartService.generateGoalProgressChart({
+        current: progress.totalProfit,
+        goal: user.weeklyGoal,
+        percentage: progress.percentageComplete,
+      });
+
+      await this.messagingProvider.sendImageMessage({
+        to: session.phone,
+        imageUrl: chartUrl,
+        caption: `🎯 *Progresso da Meta Semanal*\n${progress.percentageComplete.toFixed(0)}% concluído`,
+      });
+    } catch (error) {
+      logger.error('Error sending goal progress chart', error);
+      await this.sendMessage(session.phone, '❌ Erro ao gerar gráfico.');
+    }
+  }
+
+  /**
+   * Retorna label legível para tipo de despesa
+   */
+  private getExpenseTypeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      [ExpenseType.FUEL]: 'Combustível',
+      [ExpenseType.MAINTENANCE_PREVENTIVE]: 'Manutenção Preventiva',
+      [ExpenseType.MAINTENANCE_CORRECTIVE]: 'Manutenção Corretiva',
+      [ExpenseType.TIRES]: 'Pneus',
+      [ExpenseType.TOLL]: 'Pedágio',
+      [ExpenseType.PARKING]: 'Estacionamento',
+      [ExpenseType.CLEANING]: 'Lavagem',
+      [ExpenseType.APP_FEE]: 'Taxa do App',
+      [ExpenseType.OTHER]: 'Outros',
+    };
+
+    return labels[type] || type;
   }
 }
 

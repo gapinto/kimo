@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import {
   IMessagingProvider,
   SendMessageInput,
+  SendImageInput,
   SendMessageOutput,
 } from './IMessagingProvider';
 import { logger } from '../../shared/utils/logger';
@@ -73,6 +74,50 @@ export class EvolutionAPIProvider implements IMessagingProvider {
       }
 
       throw new AppError('Unexpected error sending WhatsApp message', 500);
+    }
+  }
+
+  async sendImageMessage(input: SendImageInput): Promise<SendMessageOutput> {
+    try {
+      const formattedNumber = this.formatPhoneNumber(input.to);
+      
+      logger.info('Sending WhatsApp image', {
+        to: input.to,
+        formattedNumber,
+        imageUrl: input.imageUrl,
+        hasCaption: !!input.caption,
+      });
+
+      const response = await this.client.post(
+        `/message/sendMedia/${this.instanceName}`,
+        {
+          number: formattedNumber,
+          mediatype: 'image',
+          media: input.imageUrl,
+          caption: input.caption || '',
+        }
+      );
+
+      logger.info('WhatsApp image sent successfully', {
+        messageId: response.data.key?.id,
+      });
+
+      return {
+        messageId: response.data.key?.id || response.data.messageId || 'unknown',
+        success: true,
+      };
+    } catch (error) {
+      logger.error('Failed to send WhatsApp image', error);
+
+      if (axios.isAxiosError(error)) {
+        throw new AppError(
+          `Failed to send WhatsApp image: ${error.message}`,
+          500,
+          'WHATSAPP_SEND_IMAGE_ERROR'
+        );
+      }
+
+      throw new AppError('Unexpected error sending WhatsApp image', 500);
     }
   }
 
