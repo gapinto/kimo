@@ -34,6 +34,12 @@ export const env = {
     evolutionApiKey: getEnvVar('EVOLUTION_API_KEY', false),
     evolutionInstanceName: getEnvVar('EVOLUTION_INSTANCE_NAME', false) || 'kimo',
   },
+
+  // AI / NLP
+  ai: {
+    groqApiKey: getEnvVar('GROQ_API_KEY', false),
+    deepseekApiKey: getEnvVar('DEEPSEEK_API_KEY', false),
+  },
 } as const;
 
 export const isDevelopment = env.nodeEnv === 'development';

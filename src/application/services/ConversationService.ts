@@ -20,6 +20,8 @@ import {
   ConversationState,
   ConversationSession,
 } from './ConversationTypes';
+import { AudioTranscriptionService } from './AudioTranscriptionService';
+import { NLPService } from './NLPService';
 import { logger } from '../../shared/utils/logger';
 
 /**
@@ -30,6 +32,8 @@ import { logger } from '../../shared/utils/logger';
 export class ConversationService {
   // Armazena sessões em memória (em produção, usar Redis)
   private sessions: Map<string, ConversationSession> = new Map();
+  private audioTranscriptionService?: AudioTranscriptionService;
+  private nlpService?: NLPService;
 
   constructor(
     private readonly messagingProvider: IMessagingProvider,
@@ -38,8 +42,18 @@ export class ConversationService {
     private readonly fixedCostRepository: IFixedCostRepository,
     private readonly tripRepository: ITripRepository,
     private readonly expenseRepository: IExpenseRepository,
-    private readonly dailySummaryRepository: IDailySummaryRepository
-  ) {}
+    private readonly dailySummaryRepository: IDailySummaryRepository,
+    groqApiKey?: string,
+    deepseekApiKey?: string
+  ) {
+    // Inicializar serviços de IA se as chaves estiverem disponíveis
+    if (groqApiKey) {
+      this.audioTranscriptionService = new AudioTranscriptionService(groqApiKey);
+    }
+    if (deepseekApiKey) {
+      this.nlpService = new NLPService(deepseekApiKey);
+    }
+  }
 
   /**
    * Processa mensagem recebida
@@ -127,6 +141,153 @@ export class ConversationService {
   }
 
   /**
+   * Processa mensagem de áudio
+   */
+  async processAudio(from: string, audioUrl: string): Promise<void> {
+    try {
+      logger.info('Processing audio message', { from, audioUrl });
+
+      // Verificar se os serviços de IA estão disponíveis
+      if (!this.audioTranscriptionService || !this.nlpService) {
+        await this.sendMessage(
+          from,
+          '❌ Desculpe, o processamento de áudio não está disponível no momento. Use texto.'
+        );
+        return;
+      }
+
+      // Enviar mensagem de "processando"
+      await this.sendMessage(from, '🎤 Processando áudio...');
+
+      // 1. Transcrever áudio
+      const transcription = await this.audioTranscriptionService.transcribe(audioUrl);
+
+      logger.info('Audio transcribed', { from, transcription });
+
+      // 2. Extrair dados do texto
+      const extractedData = await this.nlpService.extractData(transcription);
+
+      logger.info('Data extracted from audio', { from, extractedData });
+
+      // 3. Processar baseado na intenção
+      if (extractedData.confidence < 0.6) {
+        // Baixa confiança - pedir confirmação
+        await this.sendMessage(
+          from,
+          `⚠️ Não entendi muito bem. Você disse:\n\n"${transcription}"\n\nPoderia repetir ou escrever?`
+        );
+        return;
+      }
+
+      // Processar baseado na intenção
+      switch (extractedData.intent) {
+        case 'trip':
+          await this.handleAudioTrip(from, extractedData);
+          break;
+
+        case 'expense':
+          await this.handleAudioExpense(from, extractedData);
+          break;
+
+        case 'summary':
+          await this.handleAudioSummary(from);
+          break;
+
+        default:
+          await this.sendMessage(
+            from,
+            `📝 Entendi: "${transcription}"\n\nMas não sei como processar isso. Tente:\n\n• "Fiz uma corrida de R$ 45 e rodei 12km"\n• "Abasteci R$ 80"\n• "Quanto eu lucrei hoje?"`
+          );
+      }
+    } catch (error) {
+      logger.error('Error processing audio', error);
+      await this.sendMessage(
+        from,
+        '❌ Erro ao processar áudio. Tente enviar como texto.'
+      );
+    }
+  }
+
+  /**
+   * Processa corrida extraída de áudio
+   */
+  private async handleAudioTrip(
+    from: string,
+    data: import('./NLPService').ExtractedData
+  ): Promise<void> {
+    const session = this.getSession(from) || this.createSession(from);
+
+    // Montar mensagem de confirmação
+    let confirmMessage = `✅ Entendi:\n\n`;
+
+    if (data.earnings) {
+      confirmMessage += `💰 Ganho: R$ ${data.earnings.toFixed(2)}\n`;
+    }
+
+    if (data.km) {
+      confirmMessage += `🚗 KM rodados: ${data.km} km\n`;
+    }
+
+    confirmMessage += `\n*Está correto?* (sim/não)`;
+
+    // Salvar dados temporários na sessão
+    session.data.audioConfirmation = {
+      type: 'trip',
+      earnings: data.earnings,
+      km: data.km,
+    };
+
+    session.state = ConversationState.REGISTER_CONFIRM;
+
+    await this.sendMessage(from, confirmMessage);
+    this.saveSession(session);
+  }
+
+  /**
+   * Processa despesa extraída de áudio
+   */
+  private async handleAudioExpense(
+    from: string,
+    data: import('./NLPService').ExtractedData
+  ): Promise<void> {
+    const session = this.getSession(from) || this.createSession(from);
+
+    const expenseTypeLabels: Record<string, string> = {
+      fuel: 'Combustível',
+      maintenance: 'Manutenção',
+      toll: 'Pedágio',
+      parking: 'Estacionamento',
+      cleaning: 'Lavagem',
+      other: 'Outro',
+    };
+
+    let confirmMessage = `✅ Entendi:\n\n`;
+    confirmMessage += `💸 Despesa: R$ ${data.expenseAmount?.toFixed(2)}\n`;
+    confirmMessage += `📋 Tipo: ${expenseTypeLabels[data.expenseType || 'other'] || 'Outro'}\n`;
+    confirmMessage += `\n*Está correto?* (sim/não)`;
+
+    // Salvar dados temporários na sessão
+    session.data.audioConfirmation = {
+      type: 'expense',
+      amount: data.expenseAmount,
+      expenseType: data.expenseType,
+    };
+
+    session.state = ConversationState.REGISTER_CONFIRM;
+
+    await this.sendMessage(from, confirmMessage);
+    this.saveSession(session);
+  }
+
+  /**
+   * Processa solicitação de resumo via áudio
+   */
+  private async handleAudioSummary(from: string): Promise<void> {
+    const session = this.getSession(from) || this.createSession(from);
+    await this.showSummary(session);
+  }
+
+  /**
    * Estado IDLE - Primeira interação ou menu principal
    */
   private async handleIdleState(session: ConversationSession, text: string): Promise<void> {
@@ -143,13 +304,14 @@ export class ConversationService {
       // Usuário existente - mostrar menu
       session.userId = existingUser.id;
       
-      if (normalizedText.includes('registrar') || normalizedText === '1') {
+      // Processar comando (texto ou ID de botão)
+      if (normalizedText.includes('registrar') || normalizedText === '1' || normalizedText === 'registrar') {
         await this.startRegistration(session);
-      } else if (normalizedText.includes('resumo') || normalizedText === '2') {
+      } else if (normalizedText.includes('resumo') || normalizedText === '2' || normalizedText === 'resumo') {
         await this.showSummary(session);
-      } else if (normalizedText.includes('meta') || normalizedText === '3') {
+      } else if (normalizedText.includes('meta') || normalizedText === '3' || normalizedText === 'meta') {
         await this.showWeeklyProgress(session);
-      } else if (normalizedText.includes('insights') || normalizedText === '4') {
+      } else if (normalizedText.includes('insights') || normalizedText === '4' || normalizedText === 'insights') {
         await this.showInsights(session);
       } else {
         // Menu principal
@@ -575,15 +737,15 @@ ${result.message}`;
     
     const message = `👋 ${greeting}
 
-Comandos disponíveis:
-1️⃣ *Registrar dia*
-2️⃣ *Resumo*
-3️⃣ *Meta*
-4️⃣ *Insights*
+📊 *O que deseja fazer?*`;
 
-Digite o número ou o nome do comando:`;
+    const buttons = [
+      { id: 'registrar', text: '📝 Registrar corrida' },
+      { id: 'resumo', text: '📈 Ver resumo' },
+      { id: 'meta', text: '🎯 Ver meta semanal' },
+    ];
 
-    await this.sendMessage(session.phone, message);
+    await this.sendButtonMessage(session.phone, message, buttons);
   }
 
   private calculateFuelCost(session: ConversationSession): number {
@@ -830,6 +992,21 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
 
   private async sendMessage(to: string, message: string): Promise<void> {
     await this.messagingProvider.sendTextMessage({ to, message });
+  }
+
+  private async sendButtonMessage(
+    to: string,
+    message: string,
+    buttons: Array<{ id: string; text: string }>
+  ): Promise<void> {
+    // Verificar se o provider suporta botões
+    if ('sendButtonMessage' in this.messagingProvider) {
+      await (this.messagingProvider as any).sendButtonMessage(to, message, buttons);
+    } else {
+      // Fallback: enviar como texto com opções numeradas
+      const options = buttons.map((btn, idx) => `${idx + 1}. ${btn.text}`).join('\n');
+      await this.sendMessage(to, `${message}\n\n${options}`);
+    }
   }
 
   private getSession(phone: string): ConversationSession | undefined {

@@ -43,7 +43,9 @@ export function createWhatsAppRoutes(): Router {
     fixedCostRepository,
     tripRepository,
     expenseRepository,
-    dailySummaryRepository
+    dailySummaryRepository,
+    env.ai.groqApiKey,
+    env.ai.deepseekApiKey
   );
 
   // Controller

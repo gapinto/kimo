@@ -30,13 +30,23 @@ export class WhatsAppWebhookController {
       if (payload.event === 'messages.upsert') {
         const parsedMessage = parseEvolutionAPIWebhook(payload);
 
-        if (parsedMessage && parsedMessage.text) {
+        if (parsedMessage) {
           // Processar mensagem de forma assíncrona (não bloquear resposta)
-          this.conversationService
-            .processMessage(parsedMessage.from, parsedMessage.text)
-            .catch((error) => {
-              logger.error('Error processing message async', error);
-            });
+          if (parsedMessage.audioUrl) {
+            // Mensagem de áudio
+            this.conversationService
+              .processAudio(parsedMessage.from, parsedMessage.audioUrl)
+              .catch((error) => {
+                logger.error('Error processing audio message async', error);
+              });
+          } else if (parsedMessage.text) {
+            // Mensagem de texto
+            this.conversationService
+              .processMessage(parsedMessage.from, parsedMessage.text)
+              .catch((error) => {
+                logger.error('Error processing message async', error);
+              });
+          }
         }
       }
 
