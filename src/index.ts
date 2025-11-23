@@ -2,8 +2,6 @@ import { createServer, initializeScheduler } from './infrastructure/http/server'
 import { env } from './shared/utils/env';
 import { logger } from './shared/utils/logger';
 
-let schedulerService: any;
-
 /**
  * Entry point da aplicação
  */
@@ -18,38 +16,43 @@ async function bootstrap(): Promise<void> {
     // Criar servidor
     const app = createServer();
 
-    // Inicializar scheduler (mensagens automáticas)
-    schedulerService = initializeScheduler();
-
     // Iniciar servidor
-    app.listen(env.port, () => {
+    const server = app.listen(env.port, () => {
       logger.info(`🚀 Server is running on port ${env.port}`);
       logger.info(`📋 Environment: ${env.nodeEnv}`);
-      logger.info(`⏰ Scheduler started`);
       logger.info(`🏥 Health check: http://localhost:${env.port}/health`);
+      
+      // Inicializar scheduler após o servidor estar online
+      try {
+        initializeScheduler();
+        logger.info(`⏰ Scheduler started successfully`);
+      } catch (error) {
+        logger.error('Failed to start scheduler', error);
+      }
     });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      logger.info('SIGTERM signal received: closing HTTP server');
+      server.close(() => {
+        logger.info('HTTP server closed');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGINT', () => {
+      logger.info('SIGINT signal received: closing HTTP server');
+      server.close(() => {
+        logger.info('HTTP server closed');
+        process.exit(0);
+      });
+    });
+
   } catch (error) {
     logger.error('Failed to start server', error);
     process.exit(1);
   }
 }
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM signal received: closing HTTP server');
-  if (schedulerService) {
-    schedulerService.stop();
-  }
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  logger.info('SIGINT signal received: closing HTTP server');
-  if (schedulerService) {
-    schedulerService.stop();
-  }
-  process.exit(0);
-});
 
 // Iniciar aplicação
 bootstrap().catch((error) => {

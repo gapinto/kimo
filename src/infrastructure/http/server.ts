@@ -74,7 +74,9 @@ export function createServer(): Express {
 /**
  * Inicializa o serviço de agendamento
  */
-export function initializeScheduler(): SchedulerService {
+export function initializeScheduler(): void {
+  logger.info('Initializing scheduler...');
+  
   const supabase = getSupabaseClient();
   
   const userRepository = new SupabaseUserRepository(supabase);
@@ -94,6 +96,6 @@ export function initializeScheduler(): SchedulerService {
 
   scheduler.start();
   
-  return scheduler;
+  logger.info('Scheduler initialized');
 }
 
