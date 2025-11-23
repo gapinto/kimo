@@ -875,9 +875,18 @@ Digite o número:`;
   private async startRegistration(session: ConversationSession): Promise<void> {
     const message = `🚗 *Registrar Corrida*
 
-*Quanto você ganhou nesta corrida?*
+Você pode:
 
-Digite apenas o valor em reais (ex: 45):`;
+*📱 MODO RÁPIDO:*
+Digite: \`ganho km\` ou \`ganho km combustível\`
+
+Exemplos:
+• \`45 12\` (R$ 45 ganhos, 12 km)
+• \`45 12 10\` (R$ 45, 12 km, R$ 10 combustível)
+
+*📝 MODO GUIADO:*
+Ou responda: *Quanto você ganhou nesta corrida?*
+(Digite apenas o valor em reais)`;
 
     await this.sendMessage(session.phone, message);
     session.state = ConversationState.REGISTER_EARNINGS;
@@ -1088,7 +1097,13 @@ ${result.message}`;
     
     const message = `👋 ${greeting}
 
-📊 *O que deseja fazer?*`;
+⚡ *COMANDOS RÁPIDOS:*
+• \`45 12\` → Registrar corrida (R$45, 12km)
+• \`g80\` → Combustível R$80
+• \`r\` → Ver resumo do dia
+• \`m\` → Ver meta semanal
+
+📊 *Ou escolha uma opção:*`;
 
     const buttons = [
       { id: 'registrar', text: '🚗 Registrar corrida' },
@@ -1188,13 +1203,13 @@ Digite apenas o número (ex: 12):`;
 💰 Ganho: R$ ${reg.earnings.toFixed(2)}
 🚗 KM: ${reg.km} km
 
-*O que deseja fazer agora?*
+⚡ *Registrar outra corrida rápido:*
+Digite: \`45 12\` (ganho km)
 
-1. 🚗 Registrar outra corrida
-2. ⛽ Registrar despesa (combustível, etc)
-3. 📊 Ver resumo do dia
-
-Digite o número (1, 2 ou 3):`;
+📋 *Ou escolha:*
+1. 🚗 Modo guiado (corrida)
+2. ⛽ Registrar despesa
+3. 📊 Ver resumo do dia`;
 
       await this.sendMessage(session.phone, message);
 
