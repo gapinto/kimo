@@ -900,48 +900,31 @@ Ou responda: *Quanto você ganhou nesta corrida?*
         return;
       }
 
-      const getInsights = new GetInsights(
-        this.driverConfigRepository,
-        this.fixedCostRepository,
-        this.tripRepository,
-        this.expenseRepository
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Buscar resumo diário
+      const summary = await this.dailySummaryRepository.findByUserIdAndDate(
+        session.userId,
+        today
       );
 
-      const result = await getInsights.execute({
-        userId: session.userId,
-        date: new Date(),
-      });
+      let message = `📊 *RESUMO DE HOJE*\n${today.toLocaleDateString('pt-BR')}\n\n`;
 
-      let message = `📊 *RESUMO DE HOJE*\n\n`;
-
-      // Insights
-      if (result.insights.length > 0) {
-        message += `💡 *Insights:*\n`;
-        result.insights.forEach((insight) => {
-          message += `${insight}\n`;
-        });
-        message += '\n';
-      }
-
-      // Warnings
-      if (result.warnings.length > 0) {
-        message += `⚠️ *Atenção:*\n`;
-        result.warnings.forEach((warning) => {
-          message += `${warning}\n`;
-        });
-        message += '\n';
-      }
-
-      // Tips
-      if (result.tips.length > 0) {
-        message += `💰 *Dicas:*\n`;
-        result.tips.forEach((tip) => {
-          message += `${tip}\n`;
-        });
-      }
-
-      if (result.insights.length === 0 && result.warnings.length === 0) {
-        message += `Ainda não há dados suficientes para gerar insights.\n\nRegistre seu dia primeiro! Digite "1" ou "registrar dia".`;
+      if (summary) {
+        message += `💰 *Ganhos:* R$ ${summary.earnings.value.toFixed(2)}\n`;
+        message += `💸 *Despesas:* R$ ${summary.expenses.value.toFixed(2)}\n`;
+        message += `➖➖➖➖➖➖➖➖➖➖\n`;
+        message += `✅ *Lucro:* R$ ${summary.profit.value.toFixed(2)}\n\n`;
+        message += `🚗 *KM rodados:* ${summary.km.value.toFixed(1)} km\n`;
+        if (summary.costPerKm) {
+          message += `📊 *Custo por KM:* R$ ${summary.costPerKm.value.toFixed(2)}\n`;
+        }
+      } else {
+        message += `📭 *Nenhum dado registrado hoje.*\n\n`;
+        message += `Use comandos rápidos:\n`;
+        message += `• \`45 12\` → Registrar corrida\n`;
+        message += `• \`g80\` → Combustível\n`;
       }
 
       await this.sendMessage(session.phone, message);
