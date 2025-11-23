@@ -138,10 +138,14 @@ Exemplos:
 
     const mapping: Record<string, ExpenseType> = {
       fuel: ExpenseType.FUEL,
-      maintenance: ExpenseType.MAINTENANCE,
+      maintenance: ExpenseType.MAINTENANCE_CORRECTIVE, // Default para manutenção
+      maintenance_preventive: ExpenseType.MAINTENANCE_PREVENTIVE,
+      maintenance_corrective: ExpenseType.MAINTENANCE_CORRECTIVE,
+      tires: ExpenseType.TIRES,
       toll: ExpenseType.TOLL,
       parking: ExpenseType.PARKING,
       cleaning: ExpenseType.CLEANING,
+      app_fee: ExpenseType.APP_FEE,
       other: ExpenseType.OTHER,
     };
 
