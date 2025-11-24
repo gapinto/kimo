@@ -112,7 +112,7 @@ export class ConversationService {
 
       // NÍVEL 1: Comando "ok" - registra última PendingTrip
       // "ok" - registra corrida
-      // "ok g20" - registra corrida + adiciona combustível R$ 20
+      // "ok g30" - registra corrida + abasteceu R$ 30
       const okMatch = normalizedText.match(/^ok(?:\s+g(\d+(?:[.,]\d+)?))?$/);
       
       if (okMatch) {
@@ -1490,7 +1490,7 @@ Ou digite qualquer texto para iniciar o passo a passo.
 🎯 *FLUXO INTELIGENTE:* ⚡ NOVO!
 • *aceitar* → Marca que aceitou a corrida
 • *ok* → Registra última corrida avaliada
-• *ok g20* → Registra + combustível R$ 20
+• *ok g30* → Se abasteceu R$ 30 (qualquer valor)
 • *cancelar* → Cancela corrida pendente
 • *p* → Ver corridas pendentes
 
@@ -2352,7 +2352,8 @@ Digite o código ou comando:`;
           message = `🤔 OK. R$ ${result.profit.toFixed(0)} lucro (R$ ${result.profitPerKm.toFixed(1)}/km)`;
         }
         // Adicionar dica sobre comando "ok"
-        message += `\n\n💡 Depois digite *ok* ou *ok g20*`;
+        message += `\n\n💡 Depois digite *ok*\n`;
+        message += `   (Se abasteceu: *ok g30*, *ok g50*, etc)`;
       } else if (isFull) {
         // VERSÃO COMPLETA - Com todos os detalhes
         // Uso: "vale? 45 12"
@@ -2459,7 +2460,7 @@ Digite o código ou comando:`;
 
   /**
    * NÍVEL 1: Comando "ok" - registra última PendingTrip
-   * Uso: "ok" ou "ok g20"
+   * Uso: "ok" ou "ok g30" (se abasteceu R$ 30)
    */
   private async handleOkCommand(
     session: ConversationSession,
@@ -2600,7 +2601,9 @@ Digite o código ou comando:`;
       message += `💰 R$ ${pendingTrip.earnings.value.toFixed(0)} / ${pendingTrip.km.toFixed(0)}km\n`;
       message += `⏱️ Tempo estimado: ${pendingTrip.estimatedDuration} min\n\n`;
       message += `🔔 Te lembro quando acabar!\n\n`;
-      message += `Depois digite *ok* ou *ok g20* para registrar.`;
+      message += `Depois:\n`;
+      message += `• *ok* → Se não abasteceu\n`;
+      message += `• *ok g30* → Se abasteceu R$ 30 (qualquer valor)`;
 
       await this.sendMessage(session.phone, message);
 

@@ -301,9 +301,10 @@ export class SchedulerService {
           let message = `🔔 *Lembrete*\n\n`;
           message += `Você avaliou uma corrida há ${elapsed} min:\n\n`;
           message += `💰 R$ ${pendingTrip.earnings.value.toFixed(0)} / ${pendingTrip.km.toFixed(0)}km\n\n`;
-          message += `Já terminou?\n`;
-          message += `• Digite *ok* para registrar\n`;
-          message += `• Digite *ok g20* se gastou R$ 20 de combustível\n\n`;
+          message += `Já terminou?\n\n`;
+          message += `• *ok* → Se não abasteceu\n`;
+          message += `• *ok g30* → Se parou para abastecer R$ 30\n`;
+          message += `  _(qualquer valor: g50, g80, etc)_\n\n`;
           message += `😴 Parou de trabalhar? Digite *descanso*`;
 
           await this.messagingProvider.sendTextMessage({
