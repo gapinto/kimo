@@ -2522,9 +2522,9 @@ Digite o código ou comando:`;
 
       // Recalcular resumo diário
       const calculateSummary = new CalculateDailySummary(
-        this.dailySummaryRepository,
         this.tripRepository,
-        this.expenseRepository
+        this.expenseRepository,
+        this.dailySummaryRepository
       );
       await calculateSummary.execute({
         userId: session.userId,
