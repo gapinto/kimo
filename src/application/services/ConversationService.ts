@@ -2070,6 +2070,8 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
 
       const { type, typeName, amount, description, fuelInfo } = data;
 
+      const today = new Date();
+
       // Registrar despesa
       const registerExpense = new RegisterExpense(this.expenseRepository);
       await registerExpense.execute({
@@ -2077,7 +2079,18 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
         amount, // já é number
         type,
         note: description,
-        date: new Date(),
+        date: today,
+      });
+
+      // Recalcular resumo diário para incluir a despesa
+      const calculateSummary = new CalculateDailySummary(
+        this.tripRepository,
+        this.expenseRepository,
+        this.dailySummaryRepository
+      );
+      await calculateSummary.execute({
+        userId: session.userId,
+        date: today,
       });
 
       let message = `✅ *Despesa salva!*\n\n`;
