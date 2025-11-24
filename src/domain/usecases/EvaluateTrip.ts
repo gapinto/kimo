@@ -196,28 +196,32 @@ export class EvaluateTrip {
       };
     }
 
-    // SEM HISTÓRICO - usar valores genéricos temporários
-    // Critério 5: Lucro muito baixo (< R$ 1,50/km) = REJEITAR
-    if (profitPerKm < 1.5) {
+    // SEM HISTÓRICO - Avaliar baseado em margem sobre lucro
+    // Como já descontamos todos os custos, analisamos a margem de lucro
+    
+    // Critério 5: Lucro muito baixo (< R$ 0,50/km) = REJEITAR
+    // Significa margem muito pequena sobre custos
+    if (profitPerKm < 0.5) {
       return {
         recommendation: 'reject',
         message:
-          '⚠️ *LUCRO BAIXO!* Menos de R$ 1,50/km.',
+          '⚠️ *LUCRO MUITO BAIXO!* Margem de apenas R$ 0,50/km sobre custos.',
       };
     }
 
-    // Critério 6: Lucro bom (R$ 2,50/km ou mais) = ACEITAR
-    if (profitPerKm >= 2.5) {
+    // Critério 6: Lucro bom (> R$ 1,50/km) = ACEITAR
+    // Boa margem sobre os custos
+    if (profitPerKm >= 1.5) {
       return {
         recommendation: 'accept',
-        message: '✅ *BOM LUCRO!* R$ 2,50/km ou mais.',
+        message: '✅ *BOM LUCRO!* Margem de R$ 1,50/km ou mais sobre custos.',
       };
     }
 
-    // Critério 7: Lucro aceitável (R$ 1,50 a R$ 2,50/km) = NEUTRO
+    // Critério 7: Lucro aceitável (R$ 0,50 a R$ 1,50/km) = NEUTRO
     return {
       recommendation: 'neutral',
-      message: '🤔 *RAZOÁVEL.* Entre R$ 1,50 e R$ 2,50/km.',
+      message: '🤔 *RAZOÁVEL.* Margem entre R$ 0,50 e R$ 1,50/km sobre custos.',
     };
   }
 }
