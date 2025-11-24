@@ -15,6 +15,7 @@ import { GetInsights } from '../../domain/usecases/GetInsights';
 import { GetWeeklyProgress } from '../../domain/usecases/GetWeeklyProgress';
 import { EvaluateTrip } from '../../domain/usecases/EvaluateTrip';
 import { CalculateSuggestedGoal } from '../../domain/usecases/CalculateSuggestedGoal';
+import { User } from '../../domain/entities/User';
 import { DriverConfig } from '../../domain/entities/DriverConfig';
 import { FixedCost } from '../../domain/entities/FixedCost';
 import { PendingTrip } from '../../domain/entities/PendingTrip';
@@ -1603,14 +1604,9 @@ Ou digite qualquer texto para iniciar o passo a passo.
 • *45 12* → Registrar corrida
   _(R$45 ganhos, 12km rodados)_
 
-• *v 45 12* → Vale a pena? ⚡ ULTRA RÁPIDO
-  _(v VALOR KM - para Uber 16 segundos)_
-
-• *vale 45 12* → Vale a pena? 📊
-  _(versão curta com custos)_
-
-• *vale? 45 12* → Vale a pena? 📋
-  _(versão completa com detalhes)_
+• *v 45 12* → Vale a pena? ⚡
+  _(v VALOR KM - ultra rápido)_
+  _(Também: vale / vale? para mais detalhes)_
 
 🎯 *FLUXO INTELIGENTE:* ⚡ NOVO!
 • *aceitar* → Marca que aceitou a corrida
