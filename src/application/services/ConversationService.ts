@@ -562,6 +562,18 @@ export class ConversationService {
       } else if (normalizedText === 'comandos' || normalizedText === 'ajuda' || normalizedText === 'help') {
         // Lista resumida de comandos
         await this.showQuickCommandsList(session);
+      } else if (normalizedText === 'corridas' || normalizedText === 'corridas hoje') {
+        // Lista de corridas de hoje
+        await this.showTodayTrips(session);
+      } else if (normalizedText === 'corridas ontem') {
+        // Lista de corridas de ontem
+        await this.showYesterdayTrips(session);
+      } else if (normalizedText === 'despesas' || normalizedText === 'despesas hoje') {
+        // Lista de despesas de hoje
+        await this.showTodayExpenses(session);
+      } else if (normalizedText === 'despesas mes' || normalizedText === 'despesas mês') {
+        // Lista de despesas do mês
+        await this.showMonthExpenses(session);
       } else if (normalizedText === 'menu completo') {
         // Menu completo (sempre mostra versão completa)
         await this.showMainMenu(session, existingUser.name);
@@ -1687,6 +1699,9 @@ Ou digite qualquer texto para iniciar o passo a passo.
 📊 *CONSULTAS:*
 • *r* → Resumo do dia
 • *m* → Meta semanal
+• *corridas* → Histórico de corridas de hoje
+• *despesas* → Histórico de despesas de hoje
+• *despesas mes* → Despesas do mês
 • *rel* → Relatórios
 
 💸 *DESPESAS:*
@@ -3347,6 +3362,291 @@ Digite o código ou comando:`;
         session.phone,
         '❌ Erro ao atualizar consumo. Tente novamente.'
       );
+    }
+  }
+
+  /**
+   * Mostra histórico de corridas de hoje
+   */
+  private async showTodayTrips(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date(today);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Buscar corridas do dia
+      const trips = await this.tripRepository.findByUserAndDateRange(
+        session.userId,
+        today,
+        endOfDay
+      );
+
+      if (trips.length === 0) {
+        await this.sendMessage(
+          session.phone,
+          '📭 *Nenhuma corrida hoje*\n\nRegistre com: *45 12*'
+        );
+        return;
+      }
+
+      let message = `🚗 *CORRIDAS DE HOJE*\n${today.toLocaleDateString('pt-BR')}\n\n`;
+
+      let totalEarnings = 0;
+      let totalKm = 0;
+
+      trips.forEach((trip, index) => {
+        const time = trip.date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        message += `${index + 1}. *${time}* - R$ ${trip.earnings.value.toFixed(2)} / ${trip.km.value.toFixed(1)}km\n`;
+        totalEarnings += trip.earnings.value;
+        totalKm += trip.km.value;
+      });
+
+      message += `\n━━━━━━━━━━━━━━━━\n`;
+      message += `📊 *Total:* ${trips.length} corridas\n`;
+      message += `💰 *Ganhos:* R$ ${totalEarnings.toFixed(2)}\n`;
+      message += `🚗 *KM:* ${totalKm.toFixed(1)} km\n`;
+      message += `📈 *Média:* R$ ${(totalEarnings / totalKm).toFixed(2)}/km`;
+
+      await this.sendMessage(session.phone, message);
+    } catch (error) {
+      logger.error('Error showing today trips', error);
+      await this.sendMessage(session.phone, '❌ Erro ao buscar corridas.');
+    }
+  }
+
+  /**
+   * Mostra histórico de corridas de ontem
+   */
+  private async showYesterdayTrips(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date(yesterday);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Buscar corridas de ontem
+      const trips = await this.tripRepository.findByUserAndDateRange(
+        session.userId,
+        yesterday,
+        endOfDay
+      );
+
+      if (trips.length === 0) {
+        await this.sendMessage(
+          session.phone,
+          '📭 *Nenhuma corrida ontem*\n\n' + yesterday.toLocaleDateString('pt-BR')
+        );
+        return;
+      }
+
+      let message = `🚗 *CORRIDAS DE ONTEM*\n${yesterday.toLocaleDateString('pt-BR')}\n\n`;
+
+      let totalEarnings = 0;
+      let totalKm = 0;
+
+      trips.forEach((trip, index) => {
+        const time = trip.date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        message += `${index + 1}. *${time}* - R$ ${trip.earnings.value.toFixed(2)} / ${trip.km.value.toFixed(1)}km\n`;
+        totalEarnings += trip.earnings.value;
+        totalKm += trip.km.value;
+      });
+
+      message += `\n━━━━━━━━━━━━━━━━\n`;
+      message += `📊 *Total:* ${trips.length} corridas\n`;
+      message += `💰 *Ganhos:* R$ ${totalEarnings.toFixed(2)}\n`;
+      message += `🚗 *KM:* ${totalKm.toFixed(1)} km\n`;
+      message += `📈 *Média:* R$ ${(totalEarnings / totalKm).toFixed(2)}/km`;
+
+      await this.sendMessage(session.phone, message);
+    } catch (error) {
+      logger.error('Error showing yesterday trips', error);
+      await this.sendMessage(session.phone, '❌ Erro ao buscar corridas.');
+    }
+  }
+
+  /**
+   * Mostra histórico de despesas de hoje
+   */
+  private async showTodayExpenses(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date(today);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Buscar despesas do dia
+      const expenses = await this.expenseRepository.findByUserAndDateRange(
+        session.userId,
+        today,
+        endOfDay
+      );
+
+      if (expenses.length === 0) {
+        await this.sendMessage(
+          session.phone,
+          '📭 *Nenhuma despesa hoje*\n\nRegistre com: *g80*'
+        );
+        return;
+      }
+
+      let message = `💸 *DESPESAS DE HOJE*\n${today.toLocaleDateString('pt-BR')}\n\n`;
+
+      let total = 0;
+
+      expenses.forEach((expense, index) => {
+        const time = expense.date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const typeEmoji = this.getExpenseEmoji(expense.type);
+        const typeName = this.getExpenseTypeName(expense.type);
+        
+        message += `${index + 1}. *${time}* ${typeEmoji} ${typeName}\n`;
+        message += `   R$ ${expense.amount.value.toFixed(2)}`;
+        if (expense.note) {
+          message += ` - ${expense.note}`;
+        }
+        message += `\n`;
+        
+        total += expense.amount.value;
+      });
+
+      message += `\n━━━━━━━━━━━━━━━━\n`;
+      message += `📊 *Total:* ${expenses.length} despesas\n`;
+      message += `💸 *Valor:* R$ ${total.toFixed(2)}`;
+
+      await this.sendMessage(session.phone, message);
+    } catch (error) {
+      logger.error('Error showing today expenses', error);
+      await this.sendMessage(session.phone, '❌ Erro ao buscar despesas.');
+    }
+  }
+
+  /**
+   * Mostra histórico de despesas do mês
+   */
+  private async showMonthExpenses(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+      // Buscar despesas do mês
+      const expenses = await this.expenseRepository.findByUserAndDateRange(
+        session.userId,
+        startOfMonth,
+        endOfMonth
+      );
+
+      if (expenses.length === 0) {
+        await this.sendMessage(
+          session.phone,
+          '📭 *Nenhuma despesa este mês*\n\n' + 
+          startOfMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+        );
+        return;
+      }
+
+      const monthName = startOfMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      let message = `💸 *DESPESAS DE ${monthName.toUpperCase()}*\n\n`;
+
+      // Agrupar por tipo
+      const byType = new Map<ExpenseType, number>();
+      let total = 0;
+
+      expenses.forEach((expense) => {
+        const current = byType.get(expense.type) || 0;
+        byType.set(expense.type, current + expense.amount.value);
+        total += expense.amount.value;
+      });
+
+      // Ordenar por valor
+      const sorted = Array.from(byType.entries()).sort((a, b) => b[1] - a[1]);
+
+      sorted.forEach(([type, amount]) => {
+        const emoji = this.getExpenseEmoji(type);
+        const typeName = this.getExpenseTypeName(type);
+        const percentage = (amount / total) * 100;
+        
+        message += `${emoji} *${typeName}*\n`;
+        message += `   R$ ${amount.toFixed(2)} (${percentage.toFixed(1)}%)\n\n`;
+      });
+
+      message += `━━━━━━━━━━━━━━━━\n`;
+      message += `📊 *Total:* ${expenses.length} despesas\n`;
+      message += `💸 *Valor:* R$ ${total.toFixed(2)}`;
+
+      await this.sendMessage(session.phone, message);
+    } catch (error) {
+      logger.error('Error showing month expenses', error);
+      await this.sendMessage(session.phone, '❌ Erro ao buscar despesas.');
+    }
+  }
+
+  private getExpenseEmoji(type: ExpenseType): string {
+    switch (type) {
+      case ExpenseType.FUEL:
+        return '⛽';
+      case ExpenseType.MAINTENANCE_PREVENTIVE:
+      case ExpenseType.MAINTENANCE_CORRECTIVE:
+        return '🔧';
+      case ExpenseType.TIRES:
+        return '🛞';
+      case ExpenseType.CLEANING:
+        return '🧼';
+      case ExpenseType.TOLL:
+        return '🚧';
+      case ExpenseType.PARKING:
+        return '🅿️';
+      case ExpenseType.APP_FEE:
+        return '📱';
+      default:
+        return '💸';
+    }
+  }
+
+  private getExpenseTypeName(type: ExpenseType): string {
+    switch (type) {
+      case ExpenseType.FUEL:
+        return 'Combustível';
+      case ExpenseType.MAINTENANCE_PREVENTIVE:
+        return 'Manutenção Preventiva';
+      case ExpenseType.MAINTENANCE_CORRECTIVE:
+        return 'Manutenção Corretiva';
+      case ExpenseType.TIRES:
+        return 'Pneus';
+      case ExpenseType.CLEANING:
+        return 'Lavagem';
+      case ExpenseType.TOLL:
+        return 'Pedágio';
+      case ExpenseType.PARKING:
+        return 'Estacionamento';
+      case ExpenseType.APP_FEE:
+        return 'Taxa do App';
+      default:
+        return 'Outro';
     }
   }
 }
