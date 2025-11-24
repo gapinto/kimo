@@ -583,7 +583,7 @@ export class ConversationService {
         if (this.isNewUser(existingUser)) {
           await this.showSimpleMenu(session, existingUser.name);
         } else {
-          await this.showMainMenu(session, existingUser.name);
+        await this.showMainMenu(session, existingUser.name);
         }
       }
     }
@@ -2379,6 +2379,18 @@ Digite o código ou comando:`;
         return;
       }
 
+      // Buscar custos fixos estimados por dia
+      const calculateGoal = new CalculateSuggestedGoal(
+        this.driverConfigRepository,
+        this.fixedCostRepository
+      );
+      const goalData = await calculateGoal.execute({ userId: session.userId });
+      const dailyFixedCosts = 
+        goalData.dailyFuelCost + 
+        goalData.dailyMaintenanceCost + 
+        goalData.dailyDepreciationCost + 
+        goalData.dailyFixedCosts;
+
       const labels: string[] = [];
       const earnings: number[] = [];
       const expenses: number[] = [];
@@ -2394,9 +2406,19 @@ Digite o código ou comando:`;
           (s) => s.date.toDateString() === date.toDateString()
         );
 
-        earnings.push(summary ? summary.earnings.value : 0);
-        expenses.push(summary ? summary.expenses.value : 0);
-        profit.push(summary ? summary.profit.value : 0);
+        const dayEarnings = summary ? summary.earnings.value : 0;
+        earnings.push(dayEarnings);
+        
+        // Despesas = despesas diretas + custos fixos estimados (se houve atividade no dia)
+        // Considera que houve atividade se teve ganhos OU despesas
+        const directExpenses = summary ? summary.expenses.value : 0;
+        const hasActivity = summary && (summary.earnings.value > 0 || summary.expenses.value > 0);
+        const totalExpenses = hasActivity ? directExpenses + dailyFixedCosts : 0;
+        expenses.push(totalExpenses);
+        
+        // Lucro real = ganhos - despesas totais
+        const realProfit = hasActivity ? dayEarnings - totalExpenses : 0;
+        profit.push(realProfit);
       }
 
       const chartUrl = this.chartService.generateWeeklyProgressChart({
@@ -2409,7 +2431,7 @@ Digite o código ou comando:`;
       await this.messagingProvider.sendImageMessage({
         to: session.phone,
         imageUrl: chartUrl,
-        caption: '📊 *Progresso Semanal*\nGanhos, Despesas e Lucro dos últimos 7 dias',
+        caption: '📊 *Progresso Semanal (Lucro Real)*\n\nInclui custos fixos estimados:\n💰 Ganhos | 💸 Despesas totais | 💚 Lucro real',
       });
     } catch (error) {
       logger.error('Error sending weekly progress chart', error);
@@ -2677,11 +2699,11 @@ Digite o código ou comando:`;
         message += `💰 Ganho: R$ ${result.earnings.toFixed(2)}\n`;
         message += `🚗 Distância: ${result.km.toFixed(1)} km\n\n`;
         message += `📊 *Custos:*\n`;
-        message += `⛽ Combustível: R$ ${result.fuelCost.toFixed(2)}\n`;
-        message += `🔧 Manutenção: R$ ${result.maintenanceCost.toFixed(2)}\n`;
-        if (result.depreciationCost > 0) {
-          message += `📉 Depreciação: R$ ${result.depreciationCost.toFixed(2)}\n`;
-        }
+      message += `⛽ Combustível: R$ ${result.fuelCost.toFixed(2)}\n`;
+      message += `🔧 Manutenção: R$ ${result.maintenanceCost.toFixed(2)}\n`;
+      if (result.depreciationCost > 0) {
+        message += `📉 Depreciação: R$ ${result.depreciationCost.toFixed(2)}\n`;
+      }
         message += `💸 Total: R$ ${result.totalCost.toFixed(2)}\n\n`;
         message += `✅ *Lucro: R$ ${result.profit.toFixed(2)}*\n`;
         message += `📊 *Por KM: R$ ${result.profitPerKm.toFixed(2)}/km*\n\n`;
@@ -2703,13 +2725,13 @@ Digite o código ou comando:`;
         // Uso: "vale 45 12"
         message = `🤔 *${earnings.toFixed(0)} por ${km.toFixed(0)}km*\n\n`;
         
-        if (result.recommendation === 'accept') {
-          message += `✅ *ACEITE!*\n`;
-        } else if (result.recommendation === 'reject') {
-          message += `❌ *NÃO ACEITE!*\n`;
-        } else {
-          message += `🤔 *VOCÊ DECIDE*\n`;
-        }
+      if (result.recommendation === 'accept') {
+        message += `✅ *ACEITE!*\n`;
+      } else if (result.recommendation === 'reject') {
+        message += `❌ *NÃO ACEITE!*\n`;
+      } else {
+        message += `🤔 *VOCÊ DECIDE*\n`;
+      }
         
         message += `\n💰 Lucro: R$ ${result.profit.toFixed(2)}\n`;
         message += `📊 Por KM: R$ ${result.profitPerKm.toFixed(2)}/km\n`;
