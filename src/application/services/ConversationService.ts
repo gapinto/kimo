@@ -943,9 +943,9 @@ Digite apenas o número (ex: 150):`;
 
       message += `⚡ *COMANDOS RÁPIDOS:*\n\n`;
       message += `• *45 12* → Registrar corrida\n`;
-      message += `  _(R$45 ganhos, 12km rodados)_\n\n`;
+      message += `  _(R$ 45 ganhos, 12 km rodados)_\n\n`;
       message += `• *v 45 12* → Vale a pena? ⚡\n`;
-      message += `  _(ultra rápido - para Uber 16s)_\n\n`;
+      message += `  _(v VALOR KM - ultra rápido para Uber 16s)_\n\n`;
       message += `💡 O sistema já sabe seus custos!\n`;
       message += `Ele calcula o lucro REAL descontando:\n`;
       message += `✓ Combustível (R$ ${goalData.dailyFuelCost.toFixed(2)}/dia)\n`;
@@ -960,6 +960,34 @@ Digite apenas o número (ex: 150):`;
       message += `👉 Digite *oi* ou *menu* a qualquer momento!`;
 
       await this.sendMessage(session.phone, message);
+      
+      // Aguardar 2 segundos antes de enviar a segunda mensagem
+      await this.sleep(2000);
+
+      // Segunda mensagem - Quick Start Guide
+      let quickStartMessage = `🚀 *VAI COMEÇAR A RODAR AGORA?*\n\n`;
+      quickStartMessage += `Vou te mostrar como funciona!\n\n`;
+      quickStartMessage += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      quickStartMessage += `*CENÁRIO:* Apareceu uma corrida:\n`;
+      quickStartMessage += `💰 R$ 50 | 🚗 15 km\n\n`;
+      quickStartMessage += `*VOCÊ FAZ:*\n`;
+      quickStartMessage += `Digite: *v 50 15*\n`;
+      quickStartMessage += `_(v VALOR KM)_\n\n`;
+      quickStartMessage += `Eu analiso os custos e digo:\n`;
+      quickStartMessage += `✅ ACEITA ou ❌ RECUSA\n\n`;
+      quickStartMessage += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      quickStartMessage += `Depois que terminar a corrida:\n`;
+      quickStartMessage += `Digite: *ok*\n\n`;
+      quickStartMessage += `E pronto! Registrado. 🎯\n\n`;
+      quickStartMessage += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      quickStartMessage += `💡 *Quer testar agora?*\n`;
+      quickStartMessage += `Responda: *v 50 15*\n`;
+      quickStartMessage += `_(R$ 50 por 15 km)_\n\n`;
+      quickStartMessage += `Ou se quiser ver todos os comandos:\n`;
+      quickStartMessage += `Digite: *menu*`;
+
+      await this.sendMessage(session.phone, quickStartMessage);
+      
       session.state = ConversationState.IDLE;
     } catch (error) {
       logger.error('Error completing onboarding', error);
@@ -1478,7 +1506,7 @@ Ou digite qualquer texto para iniciar o passo a passo.
     const message = `⚡ *COMANDOS RÁPIDOS*
 
 🚗 *CORRIDAS:*
-• *v 45 12* → Vale a pena? (ultra rápido)
+• *v 45 12* → Vale a pena? (VALOR KM)
 • *aceitar* → Marcar que aceitou
 • *ok* → Registrar (ou *ok g30* se abasteceu)
 • *45 12* → Registrar diretamente
@@ -1513,10 +1541,10 @@ Ou digite qualquer texto para iniciar o passo a passo.
   _(R$45 ganhos, 12km rodados)_
 
 • *v 45 12* → Vale a pena? ⚡ ULTRA RÁPIDO
-  _(para Uber - 16 segundos)_
+  _(v VALOR KM - para Uber 16 segundos)_
 
 • *vale 45 12* → Vale a pena? 📊
-  _(versão curta)_
+  _(versão curta com custos)_
 
 • *vale? 45 12* → Vale a pena? 📋
   _(versão completa com detalhes)_
@@ -2358,7 +2386,7 @@ Digite o código ou comando:`;
       if (isNaN(earnings) || isNaN(km) || earnings <= 0 || km <= 0) {
         await this.sendMessage(
           session.phone,
-          '❌ Valores inválidos. Use: `vale 45 12` (R$ 45 por 12 km)'
+          '❌ Valores inválidos. Use: `vale VALOR KM`\nExemplo: `vale 45 12` (R$ 45 por 12 km)'
         );
         return;
       }
@@ -2515,7 +2543,7 @@ Digite o código ou comando:`;
       if (!pendingTrip) {
         await this.sendMessage(
           session.phone,
-          '❌ Nenhuma corrida pendente.\n\nAvalie uma corrida primeiro com `v 45 12` e depois use `ok`!'
+          '❌ Nenhuma corrida pendente.\n\nAvalie uma corrida primeiro com `v VALOR KM`\nExemplo: `v 45 12` e depois use `ok`!'
         );
         return;
       }
@@ -2615,7 +2643,7 @@ Digite o código ou comando:`;
       if (!pendingTrip) {
         await this.sendMessage(
           session.phone,
-          '❌ Nenhuma corrida pendente.\n\nAvalie uma corrida primeiro com `v 45 12`!'
+          '❌ Nenhuma corrida pendente.\n\nAvalie uma corrida primeiro com `v VALOR KM`\nExemplo: `v 45 12`!'
         );
         return;
       }
@@ -2714,7 +2742,7 @@ Digite o código ou comando:`;
       if (pendingTrips.length === 0) {
         await this.sendMessage(
           session.phone,
-          '📭 *Nenhuma corrida pendente*\n\nAvalie corridas com `v 45 12`!'
+          '📭 *Nenhuma corrida pendente*\n\nAvalie corridas com `v VALOR KM`\nExemplo: `v 45 12`!'
         );
         return;
       }
