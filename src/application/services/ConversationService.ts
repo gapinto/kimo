@@ -94,11 +94,15 @@ export class ConversationService {
       }
 
       // Comando "vale a pena": "vale 45 12" ou "v 45 12"
-      const evaluateMatch = normalizedText.match(/^(?:vale|v)\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)$/);
+      // Suporta 3 versões: "v 45 12" (ultra curta), "vale 45 12" (curta), "vale? 45 12" (completa)
+      const evaluateMatch = normalizedText.match(/^(?:vale\??|v)\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)$/);
       
       if (evaluateMatch) {
         session.state = ConversationState.IDLE;
-        await this.handleEvaluateTrip(session, evaluateMatch);
+        // Detectar qual versão usar baseado no comando
+        const isUltraShort = normalizedText.startsWith('v ');
+        const isFull = normalizedText.includes('?');
+        await this.handleEvaluateTrip(session, evaluateMatch, isUltraShort, isFull);
         this.saveSession(session);
         return;
       }
@@ -1404,8 +1408,14 @@ Ou digite qualquer texto para iniciar o passo a passo.
 • *45 12* → Registrar corrida
   _(R$45 ganhos, 12km rodados)_
 
-• *vale 45 12* → Vale a pena? 🤔
-  _(avaliar corrida antes de aceitar)_
+• *v 45 12* → Vale a pena? ⚡ ULTRA RÁPIDO
+  _(para Uber - 16 segundos)_
+
+• *vale 45 12* → Vale a pena? 📊
+  _(versão curta)_
+
+• *vale? 45 12* → Vale a pena? 📋
+  _(versão completa com detalhes)_
 
 • *g80* → Combustível
   _(R$80 de gasolina)_
@@ -2207,10 +2217,14 @@ Digite o código ou comando:`;
 
   /**
    * Avalia se uma corrida vale a pena
+   * @param isUltraShort - Se true, retorna apenas emoji (para 16 segundos Uber)
+   * @param isFull - Se true, retorna versão completa com detalhes
    */
   private async handleEvaluateTrip(
     session: ConversationSession,
-    match: RegExpMatchArray
+    match: RegExpMatchArray,
+    isUltraShort: boolean = false,
+    isFull: boolean = false
   ): Promise<void> {
     try {
       if (!session.userId) {
@@ -2244,33 +2258,69 @@ Digite o código ou comando:`;
         km,
       });
 
-      // Montar mensagem CURTA
-      let message = `🤔 *${earnings.toFixed(0)} por ${km.toFixed(0)}km*\n\n`;
-      
-      // Resposta rápida
-      if (result.recommendation === 'accept') {
-        message += `✅ *ACEITE!*\n`;
-      } else if (result.recommendation === 'reject') {
-        message += `❌ *NÃO ACEITE!*\n`;
-      } else {
-        message += `🤔 *VOCÊ DECIDE*\n`;
-      }
-      
-      message += `\n💰 Lucro: R$ ${result.profit.toFixed(2)}\n`;
-      message += `📊 Por KM: R$ ${result.profitPerKm.toFixed(2)}/km\n`;
-      message += `💸 Custos: R$ ${result.totalCost.toFixed(2)}\n\n`;
+      let message: string;
 
-      // Mensagem resumida
-      if (result.recommendation === 'accept') {
-        message += `✅ Boa corrida!`;
-      } else if (result.recommendation === 'reject') {
-        if (result.profitPerKm < 1.5) {
-          message += `⚠️ Lucro muito baixo. Espere melhor!`;
-        } else if (result.profit <= 0) {
-          message += `⛔ Prejuízo! Não aceite!`;
+      if (isUltraShort) {
+        // VERSÃO ULTRA CURTA - Apenas 1 linha (ideal para 16 segundos)
+        // Uso: "v 45 12"
+        if (result.recommendation === 'accept') {
+          message = `✅ ACEITE! R$ ${result.profit.toFixed(0)} lucro (R$ ${result.profitPerKm.toFixed(1)}/km)`;
+        } else if (result.recommendation === 'reject') {
+          message = `❌ NÃO! Lucro R$ ${result.profit.toFixed(0)} (R$ ${result.profitPerKm.toFixed(1)}/km) - RUIM`;
+        } else {
+          message = `🤔 OK. R$ ${result.profit.toFixed(0)} lucro (R$ ${result.profitPerKm.toFixed(1)}/km)`;
+        }
+      } else if (isFull) {
+        // VERSÃO COMPLETA - Com todos os detalhes
+        // Uso: "vale? 45 12"
+        message = `🤔 *VALE A PENA?*\n\n`;
+        message += `💰 Ganho: R$ ${result.earnings.toFixed(2)}\n`;
+        message += `🚗 Distância: ${result.km.toFixed(1)} km\n\n`;
+        message += `📊 *Custos:*\n`;
+        message += `⛽ Combustível: R$ ${result.fuelCost.toFixed(2)}\n`;
+        message += `🔧 Manutenção: R$ ${result.maintenanceCost.toFixed(2)}\n`;
+        if (result.depreciationCost > 0) {
+          message += `📉 Depreciação: R$ ${result.depreciationCost.toFixed(2)}\n`;
+        }
+        message += `💸 Total: R$ ${result.totalCost.toFixed(2)}\n\n`;
+        message += `✅ *Lucro: R$ ${result.profit.toFixed(2)}*\n`;
+        message += `📊 *Por KM: R$ ${result.profitPerKm.toFixed(2)}/km*\n\n`;
+        
+        if (result.recommendation === 'accept') {
+          message += `✅ *ACEITE!* Boa corrida!`;
+        } else if (result.recommendation === 'reject') {
+          message += `❌ *NÃO ACEITE!* Lucro baixo.`;
+        } else {
+          message += `🤔 *RAZOÁVEL*. Aceite se parado.`;
         }
       } else {
-        message += `🤔 Razoável. Aceite se estiver parado.`;
+        // VERSÃO CURTA PADRÃO - Balanceada
+        // Uso: "vale 45 12"
+        message = `🤔 *${earnings.toFixed(0)} por ${km.toFixed(0)}km*\n\n`;
+        
+        if (result.recommendation === 'accept') {
+          message += `✅ *ACEITE!*\n`;
+        } else if (result.recommendation === 'reject') {
+          message += `❌ *NÃO ACEITE!*\n`;
+        } else {
+          message += `🤔 *VOCÊ DECIDE*\n`;
+        }
+        
+        message += `\n💰 Lucro: R$ ${result.profit.toFixed(2)}\n`;
+        message += `📊 Por KM: R$ ${result.profitPerKm.toFixed(2)}/km\n`;
+        message += `💸 Custos: R$ ${result.totalCost.toFixed(2)}\n\n`;
+
+        if (result.recommendation === 'accept') {
+          message += `✅ Boa corrida!`;
+        } else if (result.recommendation === 'reject') {
+          if (result.profitPerKm < 1.5) {
+            message += `⚠️ Lucro muito baixo. Espere melhor!`;
+          } else if (result.profit <= 0) {
+            message += `⛔ Prejuízo! Não aceite!`;
+          }
+        } else {
+          message += `🤔 Razoável. Aceite se estiver parado.`;
+        }
       }
 
       await this.sendMessage(session.phone, message);

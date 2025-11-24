@@ -171,46 +171,53 @@ export class EvaluateTrip {
       };
     }
 
-    // Critério 2: Lucro muito baixo (< R$ 1,50/km) = REJEITAR
+    // Se tem histórico, usa a média do motorista como referência
+    if (userAverage && userAverage > 0) {
+      // Critério 2: Se for 20% abaixo da SUA média = REJEITAR
+      if (profitPerKm < userAverage * 0.8) {
+        return {
+          recommendation: 'reject',
+          message: `⚠️ *ABAIXO DA SUA MÉDIA!* Você costuma lucrar R$ ${userAverage.toFixed(2)}/km.`,
+        };
+      }
+
+      // Critério 3: Se for igual ou acima da SUA média = ACEITAR
+      if (profitPerKm >= userAverage) {
+        return {
+          recommendation: 'accept',
+          message: `✅ *ACIMA DA SUA MÉDIA!* Você lucra em média R$ ${userAverage.toFixed(2)}/km.`,
+        };
+      }
+
+      // Critério 4: Entre 80% e 100% da média = NEUTRO (aceitável)
+      return {
+        recommendation: 'neutral',
+        message: `🤔 *RAZOÁVEL.* Perto da sua média de R$ ${userAverage.toFixed(2)}/km.`,
+      };
+    }
+
+    // SEM HISTÓRICO - usar valores genéricos temporários
+    // Critério 5: Lucro muito baixo (< R$ 1,50/km) = REJEITAR
     if (profitPerKm < 1.5) {
       return {
         recommendation: 'reject',
         message:
-          '⚠️ *NÃO VALE A PENA!* Lucro muito baixo. Espere uma corrida melhor!',
+          '⚠️ *LUCRO BAIXO!* Menos de R$ 1,50/km.',
       };
     }
 
-    // Critério 3: Comparar com média do motorista
-    if (userAverage) {
-      // Se for 20% abaixo da média, não vale
-      if (profitPerKm < userAverage * 0.8) {
-        return {
-          recommendation: 'reject',
-          message: `⚠️ *ABAIXO DA MÉDIA!* Você costuma lucrar R$ ${userAverage.toFixed(2)}/km. Essa corrida está ${((1 - profitPerKm / userAverage) * 100).toFixed(0)}% abaixo.`,
-        };
-      }
-
-      // Se for igual ou acima da média, aceitar
-      if (profitPerKm >= userAverage) {
-        return {
-          recommendation: 'accept',
-          message: `✅ *VALE A PENA!* Lucro acima da sua média de R$ ${userAverage.toFixed(2)}/km!`,
-        };
-      }
-    }
-
-    // Critério 4: Lucro razoável (R$ 2,50/km ou mais) = ACEITAR
+    // Critério 6: Lucro bom (R$ 2,50/km ou mais) = ACEITAR
     if (profitPerKm >= 2.5) {
       return {
         recommendation: 'accept',
-        message: '✅ *BOA CORRIDA!* Lucro por km está excelente!',
+        message: '✅ *BOM LUCRO!* R$ 2,50/km ou mais.',
       };
     }
 
-    // Critério 5: Lucro aceitável (R$ 1,50 a R$ 2,50/km) = NEUTRO
+    // Critério 7: Lucro aceitável (R$ 1,50 a R$ 2,50/km) = NEUTRO
     return {
       recommendation: 'neutral',
-      message: '🤔 *RAZOÁVEL.* Não é a melhor, mas dá para aceitar se estiver parado.',
+      message: '🤔 *RAZOÁVEL.* Entre R$ 1,50 e R$ 2,50/km.',
     };
   }
 }
