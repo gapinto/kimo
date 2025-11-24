@@ -2468,18 +2468,37 @@ Digite o código ou comando:`;
       const fuel = match[1] ? parseFloat(match[1].replace(',', '.')) : undefined;
 
       // Registrar corrida
-      const registerTrip = new RegisterTrip(
-        this.tripRepository,
-        this.dailySummaryRepository,
-        this.driverConfigRepository
-      );
+      const registerTrip = new RegisterTrip(this.tripRepository);
 
+      const tripDate = new Date();
       await registerTrip.execute({
         userId: session.userId,
         earnings: pendingTrip.earnings.value,
         km: pendingTrip.km,
-        fuel,
-        date: new Date(),
+        timeOnlineMinutes: 0, // Não temos essa informação no fluxo rápido
+        date: tripDate,
+      });
+
+      // Se tiver combustível, registrar como despesa
+      if (fuel) {
+        const registerExpense = new RegisterExpense(this.expenseRepository);
+        await registerExpense.execute({
+          userId: session.userId,
+          type: ExpenseType.FUEL,
+          amount: fuel,
+          date: tripDate,
+        });
+      }
+
+      // Recalcular resumo diário
+      const calculateSummary = new CalculateDailySummary(
+        this.dailySummaryRepository,
+        this.tripRepository,
+        this.expenseRepository
+      );
+      await calculateSummary.execute({
+        userId: session.userId,
+        date: tripDate,
       });
 
       // Marcar como completa

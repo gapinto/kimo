@@ -125,13 +125,14 @@ export class SupabasePendingTripRepository implements IPendingTripRepository {
       .from('pending_trips')
       .delete()
       .eq('status', PendingTripStatus.COMPLETED)
-      .lt('completed_at', cutoffDate.toISOString());
+      .lt('completed_at', cutoffDate.toISOString())
+      .select(); // Precisa do .select() para retornar os deletados
 
     if (error) {
       throw new Error(`Failed to delete old completed trips: ${error.message}`);
     }
 
-    return data?.length || 0;
+    return data?.length ?? 0;
   }
 
   private toDomain(data: any): PendingTrip {
