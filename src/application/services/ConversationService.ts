@@ -2135,6 +2135,44 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
   }
 
   /**
+   * Processa confirmação de registro (despesa ou corrida)
+   */
+  private async handleRegisterConfirm(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const normalizedText = text.toLowerCase().trim();
+
+    if (normalizedText === 'sim' || normalizedText === 's' || normalizedText === 'ok') {
+      // Verificar se é confirmação de despesa ou corrida
+      if (session.data.quickExpenseConfirmation) {
+        await this.saveQuickExpense(session, session.data.quickExpenseConfirmation);
+      } else if (session.data.registration) {
+        await this.saveQuickRegister(session, session.data.registration);
+      } else {
+        await this.sendMessage(
+          session.phone,
+          '❌ Nenhum registro pendente para confirmar.'
+        );
+        session.state = ConversationState.IDLE;
+      }
+    } else if (normalizedText === 'não' || normalizedText === 'nao' || normalizedText === 'n' || normalizedText === 'cancelar') {
+      await this.sendMessage(
+        session.phone,
+        '❌ Registro cancelado!'
+      );
+      session.state = ConversationState.IDLE;
+      session.data.quickExpenseConfirmation = undefined;
+      session.data.registration = undefined;
+    } else {
+      await this.sendMessage(
+        session.phone,
+        '❌ Resposta inválida.\n\nDigite:\n• *sim* para confirmar\n• *não* para cancelar'
+      );
+    }
+  }
+
+  /**
    * Salva registro normal (passo a passo)
    */
   private async saveNormalRegister(session: ConversationSession): Promise<void> {
