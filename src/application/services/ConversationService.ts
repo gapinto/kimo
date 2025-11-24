@@ -521,6 +521,9 @@ export class ConversationService {
       } else if (normalizedText.match(/^preco\s+(\d+(?:[.,]\d+)?)$/)) {
         // Comando para atualizar preço da gasolina: "preco 5.80"
         await this.updateFuelPrice(session, normalizedText);
+      } else if (normalizedText.match(/^consumo\s+(\d+(?:[.,]\d+)?)$/)) {
+        // Comando para atualizar consumo: "consumo 12.5"
+        await this.updateFuelConsumption(session, normalizedText);
       } else if (normalizedText === 'comandos' || normalizedText === 'ajuda' || normalizedText === 'help') {
         // Lista resumida de comandos
         await this.showQuickCommandsList(session);
@@ -1491,6 +1494,7 @@ Ou digite qualquer texto para iniciar o passo a passo.
 ⚙️ *CONFIGURAÇÕES:*
 • *meta 2500* → Definir meta
 • *preco 5.80* → Atualizar gasolina
+• *consumo 12.5* → Atualizar km/litro
 • *descanso* / *ativo* → Controlar lembretes
 
 💡 Digite *menu* para ver todas as opções`;
@@ -1531,6 +1535,7 @@ Ou digite qualquer texto para iniciar o passo a passo.
 • *m* → Ver meta semanal
 • *meta 2000* → Definir meta de R$ 2000/semana
 • *preco 5.80* → Atualizar preço da gasolina
+• *consumo 12.5* → Atualizar consumo (km/L)
 • *g* → Ver gráficos 📊
 
 😴 *CONTROLE DE LEMBRETES:*
@@ -3019,6 +3024,77 @@ Digite o código ou comando:`;
       await this.sendMessage(
         session.phone,
         '❌ Erro ao atualizar preço. Tente novamente.'
+      );
+    }
+  }
+
+  /**
+   * Atualiza o consumo de combustível do motorista
+   */
+  private async updateFuelConsumption(session: ConversationSession, text: string): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      // Extrair consumo
+      const match = text.match(/^consumo\s+(\d+(?:[.,]\d+)?)$/);
+      
+      if (!match) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Formato inválido. Use: `consumo 12.5`'
+        );
+        return;
+      }
+
+      const newConsumption = parseFloat(match[1].replace(',', '.'));
+
+      if (isNaN(newConsumption) || newConsumption <= 0 || newConsumption > 30) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Consumo inválido. Digite um valor entre 1 e 30 km/L'
+        );
+        return;
+      }
+
+      // Buscar configuração atual
+      const driverConfig = await this.driverConfigRepository.findByUserId(session.userId);
+
+      if (!driverConfig) {
+        await this.sendMessage(
+          session.phone,
+          '⚠️ Complete o cadastro primeiro!'
+        );
+        return;
+      }
+
+      const oldConsumption = driverConfig.fuelConsumption;
+
+      // Atualizar consumo
+      driverConfig.updateFuelConsumption(newConsumption);
+      await this.driverConfigRepository.update(driverConfig);
+
+      let message = `✅ *Consumo atualizado!*\n\n`;
+      message += `🔄 Antes: ${oldConsumption.toFixed(1)} km/L\n`;
+      message += `🚗 Agora: ${newConsumption.toFixed(1)} km/L\n\n`;
+
+      const diff = newConsumption - oldConsumption;
+      if (diff > 0) {
+        message += `📈 Melhorou ${diff.toFixed(1)} km/L (${((diff / oldConsumption) * 100).toFixed(1)}% mais econômico)`;
+      } else {
+        message += `📉 Piorou ${Math.abs(diff).toFixed(1)} km/L (${((Math.abs(diff) / oldConsumption) * 100).toFixed(1)}% menos econômico)`;
+      }
+
+      await this.sendMessage(session.phone, message);
+
+      logger.info('Fuel consumption updated', { userId: session.userId, oldConsumption, newConsumption });
+    } catch (error) {
+      logger.error('Error updating fuel consumption', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao atualizar consumo. Tente novamente.'
       );
     }
   }
