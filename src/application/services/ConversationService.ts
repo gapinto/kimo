@@ -1221,7 +1221,7 @@ Digite apenas o número (ex: 150):`;
       
       confirmMessage += `\n*Está correto?*\n\n`;
       confirmMessage += `Digite:\n`;
-      confirmMessage += `✅ *sim* para salvar\n`;
+      confirmMessage += `✅ *ok* para salvar\n`;
       confirmMessage += `❌ *não* para cancelar`;
 
       // Salvar dados temporários na sessão para confirmar depois
@@ -1341,7 +1341,7 @@ Digite apenas o número (ex: 150):`;
       
       confirmMessage += `\n*Está correto?*\n\n`;
       confirmMessage += `Digite:\n`;
-      confirmMessage += `✅ *sim* para salvar\n`;
+      confirmMessage += `✅ *ok* para salvar\n`;
       confirmMessage += `❌ *não* para cancelar`;
 
       // Salvar dados temporários na sessão
@@ -1993,8 +1993,8 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
 
 *Confirmar?*
 
-1 - Sim, salvar
-2 - Não, cancelar`;
+✅ *ok* → Salvar
+❌ *não* → Cancelar`;
 
     await this.sendMessage(session.phone, message);
     session.state = ConversationState.REGISTER_CONFIRM;
@@ -2126,7 +2126,7 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
   ): Promise<void> {
     const normalizedText = text.toLowerCase().trim();
 
-    if (normalizedText === 'sim' || normalizedText === 's' || normalizedText === 'ok') {
+    if (normalizedText === 'ok' || normalizedText === 'sim' || normalizedText === 's' || normalizedText === '1') {
       // Verificar se é confirmação de despesa ou corrida
       if (session.data.quickExpenseConfirmation) {
         await this.saveQuickExpense(session, session.data.quickExpenseConfirmation);
@@ -2139,7 +2139,7 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
         );
         session.state = ConversationState.IDLE;
       }
-    } else if (normalizedText === 'não' || normalizedText === 'nao' || normalizedText === 'n' || normalizedText === 'cancelar') {
+    } else if (normalizedText === 'não' || normalizedText === 'nao' || normalizedText === 'n' || normalizedText === 'cancelar' || normalizedText === '2') {
       await this.sendMessage(
         session.phone,
         '❌ Registro cancelado!'
@@ -2150,7 +2150,7 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
     } else {
       await this.sendMessage(
         session.phone,
-        '❌ Resposta inválida.\n\nDigite:\n• *sim* para confirmar\n• *não* para cancelar'
+        '❌ Resposta inválida.\n\nDigite:\n• *ok* para confirmar\n• *não* para cancelar'
       );
     }
   }
