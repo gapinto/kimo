@@ -4,6 +4,8 @@
  */
 export enum ConversationState {
   IDLE = 'idle',
+  ONBOARDING_NAME = 'onboarding_name',
+  ONBOARDING_BIRTH_DATE = 'onboarding_birth_date',
   ONBOARDING_PROFILE = 'onboarding_profile',
   ONBOARDING_FUEL_CONSUMPTION = 'onboarding_fuel_consumption',
   ONBOARDING_FUEL_PRICE = 'onboarding_fuel_price',

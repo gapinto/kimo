@@ -19,6 +19,7 @@ model User {
   id        String   @id @default(uuid())
   phone     String   @unique
   name      String?
+  birthDate DateTime? @map("birth_date") @db.Date
   isActive  Boolean  @default(true) @map("is_active")
   lastActivityAt DateTime? @map("last_activity_at")
   createdAt DateTime @default(now()) @map("created_at")

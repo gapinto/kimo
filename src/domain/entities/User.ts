@@ -5,6 +5,7 @@ export interface UserProps {
   id: string;
   phone: Phone;
   name?: string;
+  birthDate?: Date;
   weeklyGoal?: number;
   profile?: DriverProfile;
   subscriptionPlan: SubscriptionPlan;
@@ -28,6 +29,7 @@ export class User {
   public static create(data: {
     phone: Phone;
     name?: string;
+    birthDate?: Date;
     weeklyGoal?: number;
     profile?: DriverProfile;
   }): User {
@@ -35,6 +37,7 @@ export class User {
       id: crypto.randomUUID(),
       phone: data.phone,
       name: data.name,
+      birthDate: data.birthDate,
       weeklyGoal: data.weeklyGoal,
       profile: data.profile,
       subscriptionPlan: SubscriptionPlan.FREE,
@@ -77,6 +80,10 @@ export class User {
     return this.props.name;
   }
 
+  public get birthDate(): Date | undefined {
+    return this.props.birthDate;
+  }
+
   public get weeklyGoal(): number | undefined {
     return this.props.weeklyGoal;
   }
@@ -112,6 +119,11 @@ export class User {
   // Methods
   public updateName(name: string): void {
     this.props.name = name;
+    this.props.updatedAt = new Date();
+  }
+
+  public updateBirthDate(birthDate: Date): void {
+    this.props.birthDate = birthDate;
     this.props.updatedAt = new Date();
   }
 
@@ -193,6 +205,7 @@ export class User {
       id: this.props.id,
       phone: this.props.phone.toJSON(),
       name: this.props.name,
+      birthDate: this.props.birthDate?.toISOString().split('T')[0], // YYYY-MM-DD
       weeklyGoal: this.props.weeklyGoal,
       profile: this.props.profile,
       subscriptionPlan: this.props.subscriptionPlan,
