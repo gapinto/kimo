@@ -508,15 +508,41 @@ export class ConversationService {
         normalizedText === 'i'
       ) {
         await this.showInsights(session);
-      } else if (normalizedText === 'grafico' || normalizedText === 'gráfico' || normalizedText === 'g') {
+      } else if (
+        normalizedText === 'rel' || 
+        normalizedText === 'relatorio' || 
+        normalizedText === 'relatório' ||
+        normalizedText === 'grafico' || 
+        normalizedText === 'gráfico'
+      ) {
         await this.showChartMenu(session);
-      } else if (normalizedText === 'g1' || normalizedText === 'grafico semana') {
+      } else if (
+        normalizedText === 'rel1' || 
+        normalizedText === 'relatorio1' || 
+        normalizedText === 'relatorio 1' ||
+        normalizedText === 'grafico semana'
+      ) {
         await this.sendWeeklyProgressChart(session);
-      } else if (normalizedText === 'g2' || normalizedText === 'grafico lucro') {
+      } else if (
+        normalizedText === 'rel2' || 
+        normalizedText === 'relatorio2' || 
+        normalizedText === 'relatorio 2' ||
+        normalizedText === 'grafico lucro'
+      ) {
         await this.sendProfitTrendChart(session);
-      } else if (normalizedText === 'g3' || normalizedText === 'grafico despesas') {
+      } else if (
+        normalizedText === 'rel3' || 
+        normalizedText === 'relatorio3' || 
+        normalizedText === 'relatorio 3' ||
+        normalizedText === 'grafico despesas'
+      ) {
         await this.sendExpensesPieChart(session);
-      } else if (normalizedText === 'g4' || normalizedText === 'grafico meta') {
+      } else if (
+        normalizedText === 'rel4' || 
+        normalizedText === 'relatorio4' || 
+        normalizedText === 'relatorio 4' ||
+        normalizedText === 'grafico meta'
+      ) {
         await this.sendGoalProgressChart(session);
       } else if (normalizedText.match(/^preco\s+(\d+(?:[.,]\d+)?)$/)) {
         // Comando para atualizar preço da gasolina: "preco 5.80"
@@ -1514,7 +1540,7 @@ Ou digite qualquer texto para iniciar o passo a passo.
 📊 *CONSULTAS:*
 • *r* → Resumo do dia
 • *m* → Meta semanal
-• *g* → Gráficos
+• *rel* → Relatórios
 
 💸 *DESPESAS:*
 • *g80* → Combustível R$ 80
@@ -1564,7 +1590,7 @@ Ou digite qualquer texto para iniciar o passo a passo.
 • *meta 2000* → Definir meta de R$ 2000/semana
 • *preco 5.80* → Atualizar preço da gasolina
 • *consumo 12.5* → Atualizar consumo (km/L)
-• *g* → Ver gráficos 📊
+• *rel* → Ver relatórios 📊
 
 😴 *CONTROLE DE LEMBRETES:*
 • *descanso* → Pausar lembretes (quando parar)
@@ -2075,23 +2101,23 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
   // ============================================
 
   /**
-   * Mostra menu de gráficos disponíveis
+   * Mostra menu de relatórios disponíveis
    */
   private async showChartMenu(session: ConversationSession): Promise<void> {
-    const message = `📊 *GRÁFICOS DISPONÍVEIS*
+    const message = `📊 *RELATÓRIOS DISPONÍVEIS*
 
-Escolha um gráfico:
+Escolha um relatório:
 
-📈 *g1* ou *grafico semana*
+📈 *rel1* ou *relatorio 1*
 Progresso Semanal (barras)
 
-📉 *g2* ou *grafico lucro*
+📉 *rel2* ou *relatorio 2*
 Evolução do Lucro (linha)
 
-🥧 *g3* ou *grafico despesas*
+🥧 *rel3* ou *relatorio 3*
 Despesas por Tipo (pizza)
 
-🎯 *g4* ou *grafico meta*
+🎯 *rel4* ou *relatorio 4*
 Progresso da Meta (medidor)
 
 Digite o código ou comando:`;
