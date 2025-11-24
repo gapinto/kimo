@@ -6,6 +6,7 @@ import { SchedulerService } from '../../application/services/SchedulerService';
 import { supabase } from '../database/supabase.client';
 import { SupabaseUserRepository } from '../database/repositories/SupabaseUserRepository';
 import { SupabaseDailySummaryRepository } from '../database/repositories/SupabaseDailySummaryRepository';
+import { SupabasePendingTripRepository } from '../database/repositories/SupabasePendingTripRepository';
 import { EvolutionAPIProvider } from '../messaging/EvolutionAPIProvider';
 import { env } from '../../shared/utils/env';
 
@@ -79,6 +80,7 @@ export function initializeScheduler(): void {
   
   const userRepository = new SupabaseUserRepository(supabase);
   const dailySummaryRepository = new SupabaseDailySummaryRepository(supabase);
+  const pendingTripRepository = new SupabasePendingTripRepository(supabase);
   
   const messagingProvider = new EvolutionAPIProvider({
     apiUrl: env.whatsapp.evolutionApiUrl,
@@ -89,6 +91,7 @@ export function initializeScheduler(): void {
   const scheduler = new SchedulerService(
     userRepository,
     dailySummaryRepository,
+    pendingTripRepository,
     messagingProvider
   );
 
