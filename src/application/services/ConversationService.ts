@@ -553,9 +553,16 @@ export class ConversationService {
       } else if (normalizedText === 'comandos' || normalizedText === 'ajuda' || normalizedText === 'help') {
         // Lista resumida de comandos
         await this.showQuickCommandsList(session);
-      } else {
-        // Menu principal
+      } else if (normalizedText === 'menu completo') {
+        // Menu completo (sempre mostra versão completa)
         await this.showMainMenu(session, existingUser.name);
+      } else {
+        // Menu adaptativo (simples para novos, completo para experientes)
+        if (this.isNewUser(existingUser)) {
+          await this.showSimpleMenu(session, existingUser.name);
+        } else {
+          await this.showMainMenu(session, existingUser.name);
+        }
       }
     }
   }
@@ -1556,6 +1563,36 @@ Ou digite qualquer texto para iniciar o passo a passo.
     await this.sendMessage(session.phone, message);
   }
 
+  /**
+   * Menu simplificado para usuários novos (< 7 dias)
+   */
+  private async showSimpleMenu(session: ConversationSession, name?: string): Promise<void> {
+    const greeting = name ? `Olá, ${name}!` : 'Olá!';
+    
+    const message = `👋 ${greeting}
+
+🚗 *COMANDOS BÁSICOS:*
+
+• *v 50 15* → Vale a pena?
+  _(R$ 50 por 15km)_
+
+• *ok* → Registrar corrida
+
+• *r* → Ver ganhos de hoje
+
+• *m* → Ver minha meta
+
+• *g80* → Registrar combustível
+
+━━━━━━━━━━━━━━━━
+
+💡 Digite:
+• *ajuda* → Ver mais comandos
+• *menu completo* → Ver todos os comandos`;
+
+    await this.sendMessage(session.phone, message);
+  }
+
   private async showMainMenu(session: ConversationSession, name?: string): Promise<void> {
     const greeting = name ? `Olá, ${name}!` : 'Olá!';
     
@@ -2047,6 +2084,20 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
     const cleaned = text.replace(/[^\d.,]/g, '').replace(',', '.');
     const parsed = parseFloat(cleaned);
     return isNaN(parsed) ? null : parsed;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Verifica se o usuário é novo (menos de 7 dias de uso)
+   */
+  private isNewUser(user: User): boolean {
+    const daysSinceCreation = Math.floor(
+      (Date.now() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    return daysSinceCreation < 7;
   }
 
   private async sendMessage(to: string, message: string): Promise<void> {
