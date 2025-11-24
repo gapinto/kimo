@@ -5,6 +5,7 @@ import { IFixedCostRepository } from '../../domain/repositories/IFixedCostReposi
 import { ITripRepository } from '../../domain/repositories/ITripRepository';
 import { IExpenseRepository } from '../../domain/repositories/IExpenseRepository';
 import { IDailySummaryRepository } from '../../domain/repositories/IDailySummaryRepository';
+import { IPendingTripRepository } from '../../domain/repositories/IPendingTripRepository';
 import { CreateUser } from '../../domain/usecases/CreateUser';
 import { RegisterTrip } from '../../domain/usecases/RegisterTrip';
 import { RegisterExpense } from '../../domain/usecases/RegisterExpense';
@@ -16,6 +17,7 @@ import { EvaluateTrip } from '../../domain/usecases/EvaluateTrip';
 import { CalculateSuggestedGoal } from '../../domain/usecases/CalculateSuggestedGoal';
 import { DriverConfig } from '../../domain/entities/DriverConfig';
 import { FixedCost } from '../../domain/entities/FixedCost';
+import { PendingTrip } from '../../domain/entities/PendingTrip';
 import { Phone } from '../../domain/value-objects/Phone';
 import { Money } from '../../domain/value-objects/Money';
 import { DriverProfile, FixedCostType, CostFrequency, ExpenseType } from '../../domain/enums';
@@ -48,6 +50,7 @@ export class ConversationService {
     private readonly tripRepository: ITripRepository,
     private readonly expenseRepository: IExpenseRepository,
     private readonly dailySummaryRepository: IDailySummaryRepository,
+    private readonly pendingTripRepository: IPendingTripRepository,
     groqApiKey?: string,
     deepseekApiKey?: string
   ) {
@@ -103,6 +106,42 @@ export class ConversationService {
         const isUltraShort = normalizedText.startsWith('v ');
         const isFull = normalizedText.includes('?');
         await this.handleEvaluateTrip(session, evaluateMatch, isUltraShort, isFull);
+        this.saveSession(session);
+        return;
+      }
+
+      // NÍVEL 1: Comando "ok" - registra última PendingTrip
+      // "ok" - registra corrida
+      // "ok g20" - registra corrida + adiciona combustível R$ 20
+      const okMatch = normalizedText.match(/^ok(?:\s+g(\d+(?:[.,]\d+)?))?$/);
+      
+      if (okMatch) {
+        session.state = ConversationState.IDLE;
+        await this.handleOkCommand(session, okMatch);
+        this.saveSession(session);
+        return;
+      }
+
+      // NÍVEL 3: Comando "aceitar" - marca corrida como in_progress
+      if (normalizedText === 'aceitar' || normalizedText === 'a') {
+        session.state = ConversationState.IDLE;
+        await this.handleAcceptTrip(session);
+        this.saveSession(session);
+        return;
+      }
+
+      // NÍVEL 3: Comando "cancelar" - cancela corrida pendente
+      if (normalizedText === 'cancelar' || normalizedText === 'x') {
+        session.state = ConversationState.IDLE;
+        await this.handleCancelTrip(session);
+        this.saveSession(session);
+        return;
+      }
+
+      // NÍVEL 3: Comando "pendentes" - lista corridas pendentes
+      if (normalizedText === 'pendentes' || normalizedText === 'p') {
+        session.state = ConversationState.IDLE;
+        await this.showPendingTrips(session);
         this.saveSession(session);
         return;
       }
@@ -1422,6 +1461,13 @@ Ou digite qualquer texto para iniciar o passo a passo.
 • *vale? 45 12* → Vale a pena? 📋
   _(versão completa com detalhes)_
 
+🎯 *FLUXO INTELIGENTE:* ⚡ NOVO!
+• *aceitar* → Marca que aceitou a corrida
+• *ok* → Registra última corrida avaliada
+• *ok g20* → Registra + combustível R$ 20
+• *cancelar* → Cancela corrida pendente
+• *p* → Ver corridas pendentes
+
 • *g80* → Combustível
   _(R$80 de gasolina)_
 
@@ -2275,6 +2321,8 @@ Digite o código ou comando:`;
         } else {
           message = `🤔 OK. R$ ${result.profit.toFixed(0)} lucro (R$ ${result.profitPerKm.toFixed(1)}/km)`;
         }
+        // Adicionar dica sobre comando "ok"
+        message += `\n\n💡 Depois digite *ok* ou *ok g20*`;
       } else if (isFull) {
         // VERSÃO COMPLETA - Com todos os detalhes
         // Uso: "vale? 45 12"
@@ -2330,6 +2378,32 @@ Digite o código ou comando:`;
 
       await this.sendMessage(session.phone, message);
 
+      // NÍVEL 1: Salvar como PendingTrip para registro rápido depois
+      try {
+        // Estimar duração: velocidade média 25 km/h + 5 min buffer
+        const estimatedDuration = Math.ceil((km / 25) * 60 + 5);
+        
+        const pendingTrip = PendingTrip.create({
+          userId: session.userId,
+          earnings: Money.create(earnings),
+          km,
+          estimatedDuration,
+        });
+        
+        await this.pendingTripRepository.save(pendingTrip);
+        
+        logger.info('PendingTrip created', {
+          pendingTripId: pendingTrip.id,
+          userId: session.userId,
+          earnings,
+          km,
+          estimatedDuration,
+        });
+      } catch (error) {
+        logger.error('Error saving PendingTrip', error);
+        // Não precisa falhar a operação se não conseguir salvar
+      }
+
       logger.info('Trip evaluation sent', {
         userId: session.userId,
         earnings,
@@ -2350,6 +2424,240 @@ Digite o código ou comando:`;
           '❌ Erro ao avaliar corrida. Tente novamente.'
         );
       }
+    }
+  }
+
+  /**
+   * NÍVEL 1: Comando "ok" - registra última PendingTrip
+   * Uso: "ok" ou "ok g20"
+   */
+  private async handleOkCommand(
+    session: ConversationSession,
+    match: RegExpMatchArray
+  ): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      // Buscar última PendingTrip do usuário
+      const pendingTrip = await this.pendingTripRepository.findLatestPendingByUserId(session.userId);
+
+      if (!pendingTrip) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Nenhuma corrida pendente.\n\nAvalie uma corrida primeiro com `v 45 12` e depois use `ok`!'
+        );
+        return;
+      }
+
+      // Verificar se expirou (mais de 2 horas)
+      if (pendingTrip.isExpired(120)) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Essa corrida expirou (mais de 2h).\n\nAvalie uma nova corrida com `v VALOR KM`'
+        );
+        // Cancelar automaticamente
+        pendingTrip.cancel();
+        await this.pendingTripRepository.update(pendingTrip);
+        return;
+      }
+
+      // Extrair combustível do comando (se houver)
+      const fuel = match[1] ? parseFloat(match[1].replace(',', '.')) : undefined;
+
+      // Registrar corrida
+      const registerTrip = new RegisterTrip(
+        this.tripRepository,
+        this.dailySummaryRepository,
+        this.driverConfigRepository
+      );
+
+      await registerTrip.execute({
+        userId: session.userId,
+        earnings: pendingTrip.earnings.value,
+        km: pendingTrip.km,
+        fuel,
+        date: new Date(),
+      });
+
+      // Marcar como completa
+      pendingTrip.complete();
+      await this.pendingTripRepository.update(pendingTrip);
+
+      // Mensagem de confirmação
+      let message = `✅ *Corrida registrada!*\n\n`;
+      message += `💰 Ganhos: R$ ${pendingTrip.earnings.value.toFixed(2)}\n`;
+      message += `🚗 KM: ${pendingTrip.km.toFixed(1)} km\n`;
+      if (fuel) {
+        message += `⛽ Combustível: R$ ${fuel.toFixed(2)}\n`;
+      }
+      message += `\n🎯 Use \`r\` para ver o resumo do dia!`;
+
+      await this.sendMessage(session.phone, message);
+
+      logger.info('Trip registered via OK command', {
+        userId: session.userId,
+        pendingTripId: pendingTrip.id,
+        earnings: pendingTrip.earnings.value,
+        km: pendingTrip.km,
+        fuel,
+      });
+    } catch (error) {
+      logger.error('Error handling OK command', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao registrar corrida. Tente novamente ou use o modo normal.'
+      );
+    }
+  }
+
+  /**
+   * NÍVEL 3: Comando "aceitar" - marca corrida como in_progress
+   */
+  private async handleAcceptTrip(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const pendingTrip = await this.pendingTripRepository.findLatestPendingByUserId(session.userId);
+
+      if (!pendingTrip) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Nenhuma corrida pendente.\n\nAvalie uma corrida primeiro com `v 45 12`!'
+        );
+        return;
+      }
+
+      if (pendingTrip.isExpired(120)) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Essa corrida expirou (mais de 2h).'
+        );
+        pendingTrip.cancel();
+        await this.pendingTripRepository.update(pendingTrip);
+        return;
+      }
+
+      // Marcar como in_progress
+      pendingTrip.markInProgress();
+      await this.pendingTripRepository.update(pendingTrip);
+
+      let message = `✅ *Corrida aceita!*\n\n`;
+      message += `💰 R$ ${pendingTrip.earnings.value.toFixed(0)} / ${pendingTrip.km.toFixed(0)}km\n`;
+      message += `⏱️ Tempo estimado: ${pendingTrip.estimatedDuration} min\n\n`;
+      message += `🔔 Te lembro quando acabar!\n\n`;
+      message += `Depois digite *ok* ou *ok g20* para registrar.`;
+
+      await this.sendMessage(session.phone, message);
+
+      logger.info('Trip marked as in_progress', {
+        userId: session.userId,
+        pendingTripId: pendingTrip.id,
+      });
+    } catch (error) {
+      logger.error('Error accepting trip', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao aceitar corrida. Tente novamente.'
+      );
+    }
+  }
+
+  /**
+   * NÍVEL 3: Comando "cancelar" - cancela corrida pendente
+   */
+  private async handleCancelTrip(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const pendingTrip = await this.pendingTripRepository.findLatestPendingByUserId(session.userId);
+
+      if (!pendingTrip) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Nenhuma corrida pendente para cancelar.'
+        );
+        return;
+      }
+
+      // Cancelar
+      pendingTrip.cancel();
+      await this.pendingTripRepository.update(pendingTrip);
+
+      await this.sendMessage(
+        session.phone,
+        `✅ *Corrida cancelada!*\n\nR$ ${pendingTrip.earnings.value.toFixed(0)} / ${pendingTrip.km.toFixed(0)}km foi removida.`
+      );
+
+      logger.info('Trip cancelled', {
+        userId: session.userId,
+        pendingTripId: pendingTrip.id,
+      });
+    } catch (error) {
+      logger.error('Error cancelling trip', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao cancelar corrida.'
+      );
+    }
+  }
+
+  /**
+   * NÍVEL 3: Lista corridas pendentes
+   */
+  private async showPendingTrips(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const pendingTrips = await this.pendingTripRepository.findPendingByUserId(session.userId);
+
+      if (pendingTrips.length === 0) {
+        await this.sendMessage(
+          session.phone,
+          '📭 *Nenhuma corrida pendente*\n\nAvalie corridas com `v 45 12`!'
+        );
+        return;
+      }
+
+      let message = `📋 *CORRIDAS PENDENTES* (${pendingTrips.length})\n\n`;
+
+      for (const trip of pendingTrips.slice(0, 5)) { // Mostrar no máximo 5
+        const elapsed = Math.floor(
+          (new Date().getTime() - trip.evaluatedAt.getTime()) / (1000 * 60)
+        );
+
+        const statusEmoji = trip.status === 'in_progress' ? '🚗' : '⏳';
+        const statusText = trip.status === 'in_progress' ? 'EM ANDAMENTO' : 'PENDENTE';
+
+        message += `${statusEmoji} *${statusText}*\n`;
+        message += `💰 R$ ${trip.earnings.value.toFixed(0)} / ${trip.km.toFixed(0)}km\n`;
+        message += `⏱️ Há ${elapsed} min\n`;
+        message += `➖➖➖➖➖➖➖➖\n`;
+      }
+
+      message += `\n*Comandos:*\n`;
+      message += `• *ok* → Registrar última\n`;
+      message += `• *aceitar* → Marcar como aceita\n`;
+      message += `• *cancelar* → Remover última`;
+
+      await this.sendMessage(session.phone, message);
+    } catch (error) {
+      logger.error('Error showing pending trips', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao buscar corridas pendentes.'
+      );
     }
   }
 

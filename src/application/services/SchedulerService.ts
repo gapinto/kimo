@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { IUserRepository } from '../../domain/repositories/IUserRepository';
 import { IDailySummaryRepository } from '../../domain/repositories/IDailySummaryRepository';
+import { IPendingTripRepository } from '../../domain/repositories/IPendingTripRepository';
 import { IMessagingProvider } from '../../infrastructure/messaging/IMessagingProvider';
 import { GetWeeklyProgress } from '../../domain/usecases/GetWeeklyProgress';
 import { logger } from '../../shared/utils/logger';
@@ -15,6 +16,7 @@ export class SchedulerService {
   constructor(
     private readonly userRepository: IUserRepository,
     private readonly dailySummaryRepository: IDailySummaryRepository,
+    private readonly pendingTripRepository: IPendingTripRepository,
     private readonly messagingProvider: IMessagingProvider
   ) {}
 
@@ -53,6 +55,18 @@ export class SchedulerService {
       cron.schedule(
         '0 10,13,16,19 * * *',
         () => this.sendRegistrationReminders(),
+        {
+          scheduled: true,
+          timezone: 'America/Sao_Paulo',
+        }
+      )
+    );
+
+    // NÍVEL 2: Lembretes de corridas pendentes - A cada 10 minutos
+    this.jobs.push(
+      cron.schedule(
+        '*/10 * * * *',
+        () => this.sendPendingTripReminders(),
         {
           scheduled: true,
           timezone: 'America/Sao_Paulo',
@@ -235,6 +249,80 @@ export class SchedulerService {
       logger.info('Registration reminders sent successfully');
     } catch (error) {
       logger.error('Error in sendRegistrationReminders', error);
+    }
+  }
+
+  /**
+   * NÍVEL 2: Envia lembretes de corridas pendentes que passaram do tempo estimado
+   */
+  private async sendPendingTripReminders(): Promise<void> {
+    try {
+      logger.info('Checking pending trips for reminders...');
+
+      // Buscar corridas pendentes que precisam de lembrete
+      const pendingTrips = await this.pendingTripRepository.findPendingForReminders();
+
+      if (pendingTrips.length === 0) {
+        logger.info('No pending trips need reminders');
+        return;
+      }
+
+      logger.info(`Found ${pendingTrips.length} pending trips needing reminders`);
+
+      for (const pendingTrip of pendingTrips) {
+        try {
+          // Buscar usuário
+          const user = await this.userRepository.findById(pendingTrip.userId);
+          
+          if (!user) {
+            logger.warn('User not found for pending trip', { 
+              pendingTripId: pendingTrip.id, 
+              userId: pendingTrip.userId 
+            });
+            continue;
+          }
+
+          // Calcular tempo decorrido
+          const elapsed = Math.floor(
+            (new Date().getTime() - pendingTrip.evaluatedAt.getTime()) / (1000 * 60)
+          );
+
+          // Montar mensagem
+          let message = `🔔 *Lembrete*\n\n`;
+          message += `Você avaliou uma corrida há ${elapsed} min:\n\n`;
+          message += `💰 R$ ${pendingTrip.earnings.value.toFixed(0)} / ${pendingTrip.km.toFixed(0)}km\n\n`;
+          message += `Já terminou?\n`;
+          message += `• Digite *ok* para registrar\n`;
+          message += `• Digite *ok g20* se gastou R$ 20 de combustível`;
+
+          await this.messagingProvider.sendTextMessage({
+            to: user.phone.value,
+            message,
+          });
+
+          // Marcar lembrete como enviado
+          pendingTrip.markReminderSent();
+          await this.pendingTripRepository.update(pendingTrip);
+
+          logger.info('Pending trip reminder sent', { 
+            pendingTripId: pendingTrip.id, 
+            userId: user.id,
+            elapsed 
+          });
+
+          // Aguardar 1s entre mensagens para não sobrecarregar
+          await this.sleep(1000);
+        } catch (error) {
+          logger.error('Error sending pending trip reminder', { 
+            pendingTripId: pendingTrip.id, 
+            error 
+          });
+        }
+      }
+
+      logger.info('Pending trip reminders sent successfully');
+    } catch (error) {
+      logger.error('Error in sendPendingTripReminders', error);
     }
   }
 
