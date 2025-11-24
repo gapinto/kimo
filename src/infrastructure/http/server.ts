@@ -2,6 +2,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import { AppError } from '../../shared/errors/AppError';
 import { logger } from '../../shared/utils/logger';
 import { createWhatsAppRoutes } from './routes/whatsapp.routes';
+import { createMobileRoutes } from './routes/mobile.routes';
 import { SchedulerService } from '../../application/services/SchedulerService';
 import { supabase } from '../database/supabase.client';
 import { SupabaseUserRepository } from '../database/repositories/SupabaseUserRepository';
@@ -41,6 +42,7 @@ export function createServer(): Express {
 
   // Rotas
   app.use('/api/whatsapp', createWhatsAppRoutes());
+  app.use('/api/mobile', createMobileRoutes());
 
   // 404 handler
   app.use((_req: Request, _res: Response, next: NextFunction) => {

@@ -1,6 +1,13 @@
 import { Money } from '../value-objects/Money';
 import { DriverProfile } from '../enums';
 
+export interface AcceptanceCriteria {
+  minValue: number;           // Valor mínimo para aceitar (R$)
+  minValuePerKm: number;      // Valor mínimo por km (R$/km)
+  maxKm: number;              // Distância máxima para aceitar (km)
+  peakHourMinValuePerKm?: number; // Valor mínimo/km no horário de pico
+}
+
 export interface DriverConfigProps {
   id: string;
   userId: string;
@@ -10,6 +17,7 @@ export interface DriverConfigProps {
   avgFuelPrice: Money;           // Preço médio do combustível
   avgKmPerDay: number;           // KM médio por dia
   workDaysPerWeek: number;       // Dias trabalhados por semana
+  acceptanceCriteria?: AcceptanceCriteria; // Critérios de aceitação
   // Financiamento (se aplicável)
   financingBalance?: Money;      // Saldo devedor do financiamento
   financingMonthlyPayment?: Money; // Valor da parcela mensal
@@ -140,6 +148,10 @@ export class DriverConfig {
     return this.props.updatedAt;
   }
 
+  public get acceptanceCriteria(): AcceptanceCriteria | undefined {
+    return this.props.acceptanceCriteria;
+  }
+
   // Methods
   public updateProfile(profile: DriverProfile): void {
     this.props.profile = profile;
@@ -175,6 +187,11 @@ export class DriverConfig {
     if (data.balance) this.props.financingBalance = data.balance;
     if (data.monthlyPayment) this.props.financingMonthlyPayment = data.monthlyPayment;
     if (data.remainingMonths !== undefined) this.props.financingRemainingMonths = data.remainingMonths;
+    this.props.updatedAt = new Date();
+  }
+
+  public updateAcceptanceCriteria(criteria: AcceptanceCriteria): void {
+    this.props.acceptanceCriteria = criteria;
     this.props.updatedAt = new Date();
   }
 
@@ -238,6 +255,7 @@ export class DriverConfig {
       avgFuelPrice: this.props.avgFuelPrice.toJSON(),
       avgKmPerDay: this.props.avgKmPerDay,
       workDaysPerWeek: this.props.workDaysPerWeek,
+      acceptanceCriteria: this.props.acceptanceCriteria,
       financingBalance: this.props.financingBalance?.toJSON(),
       financingMonthlyPayment: this.props.financingMonthlyPayment?.toJSON(),
       financingRemainingMonths: this.props.financingRemainingMonths,
