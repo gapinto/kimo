@@ -146,6 +146,32 @@ export class ConversationService {
         return;
       }
 
+      // ANTI-SPAM: Comando "descanso" - pausa lembretes
+      if (
+        normalizedText === 'descanso' ||
+        normalizedText === 'pausa' ||
+        normalizedText === 'parar' ||
+        normalizedText === 'off'
+      ) {
+        session.state = ConversationState.IDLE;
+        await this.handleSetInactive(session);
+        this.saveSession(session);
+        return;
+      }
+
+      // ANTI-SPAM: Comando "ativo" - retoma lembretes
+      if (
+        normalizedText === 'ativo' ||
+        normalizedText === 'voltar' ||
+        normalizedText === 'online' ||
+        normalizedText === 'on'
+      ) {
+        session.state = ConversationState.IDLE;
+        await this.handleSetActive(session);
+        this.saveSession(session);
+        return;
+      }
+
       // Comando rápido de despesa: "g80", "m150 reparo"
       const quickExpenseMatch = text.match(/^([gmpel])(\d+(?:[.,]\d+)?)(?:\s+(.+))?$/i);
       
@@ -1477,6 +1503,10 @@ Ou digite qualquer texto para iniciar o passo a passo.
 • *preco 5.80* → Atualizar preço da gasolina
 • *g* → Ver gráficos 📊
 
+😴 *CONTROLE DE LEMBRETES:*
+• *descanso* → Pausar lembretes (quando parar)
+• *ativo* → Retomar lembretes (quando voltar)
+
 📊 *Ou escolha uma opção:*`;
 
     const buttons = [
@@ -2676,6 +2706,80 @@ Digite o código ou comando:`;
       await this.sendMessage(
         session.phone,
         '❌ Erro ao buscar corridas pendentes.'
+      );
+    }
+  }
+
+  /**
+   * ANTI-SPAM: Pausa lembretes (modo descanso)
+   */
+  private async handleSetInactive(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const user = await this.userRepository.findById(session.userId);
+      if (!user) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      user.setInactive();
+      await this.userRepository.update(user);
+
+      let message = `😴 *MODO DESCANSO ATIVADO*\n\n`;
+      message += `✅ Você não receberá mais lembretes automáticos\n\n`;
+      message += `💡 Quando voltar a trabalhar, digite:\n`;
+      message += `• *ativo* ou *voltar* ou *online*`;
+
+      await this.sendMessage(session.phone, message);
+
+      logger.info('User set to inactive (rest mode)', { userId: session.userId });
+    } catch (error) {
+      logger.error('Error setting user inactive', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao ativar modo descanso. Tente novamente.'
+      );
+    }
+  }
+
+  /**
+   * ANTI-SPAM: Retoma lembretes (modo ativo)
+   */
+  private async handleSetActive(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      const user = await this.userRepository.findById(session.userId);
+      if (!user) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      user.setActive();
+      await this.userRepository.update(user);
+
+      let message = `🚀 *BEM-VINDO DE VOLTA!*\n\n`;
+      message += `✅ Lembretes automáticos reativados\n\n`;
+      message += `📊 Você voltará a receber:\n`;
+      message += `• Lembretes de corridas pendentes\n`;
+      message += `• Resumos e insights\n\n`;
+      message += `😴 Para pausar novamente: *descanso*`;
+
+      await this.sendMessage(session.phone, message);
+
+      logger.info('User set to active', { userId: session.userId });
+    } catch (error) {
+      logger.error('Error setting user active', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao ativar lembretes. Tente novamente.'
       );
     }
   }

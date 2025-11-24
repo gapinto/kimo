@@ -254,6 +254,7 @@ export class SchedulerService {
 
   /**
    * NÍVEL 2: Envia lembretes de corridas pendentes que passaram do tempo estimado
+   * ANTI-SPAM: Respeita modo descanso (isActive)
    */
   private async sendPendingTripReminders(): Promise<void> {
     try {
@@ -282,6 +283,15 @@ export class SchedulerService {
             continue;
           }
 
+          // ANTI-SPAM: Verificar se o usuário está ativo (não está em modo descanso)
+          if (!user.isActive) {
+            logger.info('User is inactive (rest mode), skipping reminder', {
+              userId: user.id,
+              pendingTripId: pendingTrip.id
+            });
+            continue;
+          }
+
           // Calcular tempo decorrido
           const elapsed = Math.floor(
             (new Date().getTime() - pendingTrip.evaluatedAt.getTime()) / (1000 * 60)
@@ -293,7 +303,8 @@ export class SchedulerService {
           message += `💰 R$ ${pendingTrip.earnings.value.toFixed(0)} / ${pendingTrip.km.toFixed(0)}km\n\n`;
           message += `Já terminou?\n`;
           message += `• Digite *ok* para registrar\n`;
-          message += `• Digite *ok g20* se gastou R$ 20 de combustível`;
+          message += `• Digite *ok g20* se gastou R$ 20 de combustível\n\n`;
+          message += `😴 Parou de trabalhar? Digite *descanso*`;
 
           await this.messagingProvider.sendTextMessage({
             to: user.phone.value,

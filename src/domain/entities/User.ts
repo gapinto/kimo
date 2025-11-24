@@ -9,6 +9,8 @@ export interface UserProps {
   profile?: DriverProfile;
   subscriptionPlan: SubscriptionPlan;
   subscriptionExpiresAt?: Date;
+  isActive: boolean; // true = recebe lembretes, false = modo descanso
+  lastActivityAt?: Date; // última interação com o bot
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +39,8 @@ export class User {
       profile: data.profile,
       subscriptionPlan: SubscriptionPlan.FREE,
       subscriptionExpiresAt: undefined,
+      isActive: true, // Começa ativo
+      lastActivityAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -95,6 +99,14 @@ export class User {
 
   public get subscriptionExpiresAt(): Date | undefined {
     return this.props.subscriptionExpiresAt;
+  }
+
+  public get isActive(): boolean {
+    return this.props.isActive;
+  }
+
+  public get lastActivityAt(): Date | undefined {
+    return this.props.lastActivityAt;
   }
 
   // Methods
@@ -160,6 +172,22 @@ export class User {
     );
   }
 
+  public setActive(): void {
+    this.props.isActive = true;
+    this.props.lastActivityAt = new Date();
+    this.props.updatedAt = new Date();
+  }
+
+  public setInactive(): void {
+    this.props.isActive = false;
+    this.props.updatedAt = new Date();
+  }
+
+  public updateLastActivity(): void {
+    this.props.lastActivityAt = new Date();
+    this.props.updatedAt = new Date();
+  }
+
   public toJSON(): Record<string, unknown> {
     return {
       id: this.props.id,
@@ -169,6 +197,8 @@ export class User {
       profile: this.props.profile,
       subscriptionPlan: this.props.subscriptionPlan,
       subscriptionExpiresAt: this.props.subscriptionExpiresAt?.toISOString(),
+      isActive: this.props.isActive,
+      lastActivityAt: this.props.lastActivityAt?.toISOString(),
       createdAt: this.props.createdAt.toISOString(),
       updatedAt: this.props.updatedAt.toISOString(),
     };

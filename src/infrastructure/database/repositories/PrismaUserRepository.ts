@@ -19,6 +19,8 @@ export class PrismaUserRepository implements IUserRepository {
           id: user.id,
           phone: user.phone.value,
           name: user.name,
+          isActive: user.isActive,
+          lastActivityAt: user.lastActivityAt,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
         },
@@ -41,6 +43,8 @@ export class PrismaUserRepository implements IUserRepository {
         phone: Phone.create(row.phone),
         name: row.name ?? undefined,
         subscriptionPlan: SubscriptionPlan.FREE,
+        isActive: row.isActive,
+        lastActivityAt: row.lastActivityAt ?? undefined,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       });
@@ -62,6 +66,8 @@ export class PrismaUserRepository implements IUserRepository {
         phone: Phone.create(row.phone),
         name: row.name ?? undefined,
         subscriptionPlan: SubscriptionPlan.FREE,
+        isActive: row.isActive,
+        lastActivityAt: row.lastActivityAt ?? undefined,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       });
@@ -99,6 +105,8 @@ export class PrismaUserRepository implements IUserRepository {
         data: {
           phone: user.phone.value,
           name: user.name,
+          isActive: user.isActive,
+          lastActivityAt: user.lastActivityAt,
           updatedAt: user.updatedAt,
         },
       });

@@ -13,6 +13,8 @@ interface UserRow {
   profile: string | null;
   subscription_plan: string;
   subscription_expires_at: string | null;
+  is_active: boolean;
+  last_activity_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -165,6 +167,8 @@ export class SupabaseUserRepository implements IUserRepository {
       subscriptionExpiresAt: row.subscription_expires_at
         ? new Date(row.subscription_expires_at)
         : undefined,
+      isActive: row.is_active,
+      lastActivityAt: row.last_activity_at ? new Date(row.last_activity_at) : undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     });
@@ -179,6 +183,8 @@ export class SupabaseUserRepository implements IUserRepository {
       profile: user.profile ?? null,
       subscription_plan: user.subscriptionPlan,
       subscription_expires_at: user.subscriptionExpiresAt?.toISOString() ?? null,
+      is_active: user.isActive,
+      last_activity_at: user.lastActivityAt?.toISOString() ?? null,
       created_at: user.createdAt.toISOString(),
       updated_at: user.updatedAt.toISOString(),
     };
