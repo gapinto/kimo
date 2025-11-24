@@ -854,12 +854,14 @@ Digite apenas o número (ex: 150):`;
       message += `━━━━━━━━━━━━━━\n`;
       message += `💸 *Total/dia: R$ ${goalData.totalDailyCost.toFixed(2)}*\n\n`;
 
-      message += `🎯 *Metas Sugeridas:*\n`;
+      message += `🎯 *Metas Sugeridas (Realistas):*\n`;
       message += `📅 *Meta Diária: R$ ${goalData.suggestedDailyGoal.toFixed(2)}*\n`;
+      message += `   (Custos + ${goalData.profitMargin}% lucro)\n`;
       message += `📆 *Meta Semanal: R$ ${goalData.suggestedWeeklyGoal.toFixed(2)}*\n`;
-      message += `\n💡 Para alterar sua meta: \`meta VALOR\`\n\n`;
+      message += `\n💡 Essa meta é realista e cobre todos os custos.\n`;
+      message += `Para alterar: \`meta VALOR\`\n\n`;
 
-      message += `💵 *Lucro Projetado:*\n`;
+      message += `💵 *Lucro Projetado (se atingir meta):*\n`;
       message += `• Por dia: R$ ${goalData.dailyProfit.toFixed(2)}\n`;
       message += `• Por semana: R$ ${goalData.weeklyProfit.toFixed(2)}\n`;
       message += `• Por mês: R$ ${goalData.monthlyProfit.toFixed(2)}\n\n`;
@@ -1129,6 +1131,10 @@ Ou digite qualquer texto para iniciar o passo a passo.
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
+      // Buscar usuário para pegar a meta
+      const user = await this.userRepository.findById(session.userId);
+      const dailyGoal = user?.weeklyGoal ? user.weeklyGoal / 6 : null;
+
       // Buscar resumo diário
       const summary = await this.dailySummaryRepository.findByUserAndDate(
         session.userId,
@@ -1140,14 +1146,59 @@ Ou digite qualquer texto para iniciar o passo a passo.
       if (summary) {
         message += `💰 *Ganhos:* R$ ${summary.earnings.value.toFixed(2)}\n`;
         message += `💸 *Despesas:* R$ ${summary.expenses.value.toFixed(2)}\n`;
-        message += `➖➖➖➖➖➖➖➖➖➖\n`;
+        message += `━━━━━━━━━━━━━━━━\n`;
         message += `✅ *Lucro:* R$ ${summary.profit.value.toFixed(2)}\n\n`;
+
+        // Comparar com meta diária
+        if (dailyGoal) {
+          const percentage = (summary.profit.value / dailyGoal) * 100;
+          message += `🎯 *Meta do dia:* R$ ${dailyGoal.toFixed(2)}\n`;
+          message += `📊 *Atingido:* ${percentage.toFixed(0)}%\n\n`;
+
+          if (percentage >= 100) {
+            const extra = summary.profit.value - dailyGoal;
+            message += `🎉 *Meta batida!* +R$ ${extra.toFixed(2)}\n\n`;
+          } else if (percentage >= 80) {
+            const remaining = dailyGoal - summary.profit.value;
+            message += `👏 *Quase lá!* Falta R$ ${remaining.toFixed(2)}\n\n`;
+          } else if (percentage >= 50) {
+            const remaining = dailyGoal - summary.profit.value;
+            message += `💪 *Continue!* Falta R$ ${remaining.toFixed(2)}\n\n`;
+          } else {
+            const remaining = dailyGoal - summary.profit.value;
+            message += `⚠️ *Atenção!* Falta R$ ${remaining.toFixed(2)}\n\n`;
+          }
+        }
+
         message += `🚗 *KM rodados:* ${summary.km.value.toFixed(1)} km\n`;
         if (summary.costPerKm) {
           message += `📊 *Custo por KM:* R$ ${summary.costPerKm.value.toFixed(2)}\n`;
         }
+        
+        // Calcular lucro por KM
+        if (summary.km.value > 0) {
+          const profitPerKm = summary.profit.value / summary.km.value;
+          message += `💵 *Lucro por KM:* R$ ${profitPerKm.toFixed(2)}\n`;
+          
+          // Gerar insight baseado no lucro/km
+          message += `\n💡 *INSIGHT:*\n`;
+          if (profitPerKm >= 2.5) {
+            message += `Excelente! Lucro/km está ótimo. Continue priorizando corridas assim!`;
+          } else if (profitPerKm >= 1.5) {
+            message += `Bom lucro/km. Tente aceitar mais corridas acima de R$ 2/km.`;
+          } else if (profitPerKm >= 1.0) {
+            message += `⚠️ Lucro/km baixo. Avalie corridas antes com \`vale VALOR KM\` e evite as de lucro baixo.`;
+          } else {
+            message += `🚨 Lucro/km muito baixo! Você rodou ${summary.km.value.toFixed(0)}km mas lucrou pouco. Foque em corridas mais rentáveis.`;
+          }
+        }
       } else {
         message += `📭 *Nenhum dado registrado hoje.*\n\n`;
+        
+        if (dailyGoal) {
+          message += `🎯 Meta de hoje: R$ ${dailyGoal.toFixed(2)}\n\n`;
+        }
+        
         message += `Use comandos rápidos:\n`;
         message += `• \`45 12\` → Registrar corrida\n`;
         message += `• \`g80\` → Combustível\n`;
@@ -1184,29 +1235,54 @@ Ou digite qualquer texto para iniciar o passo a passo.
         referenceDate: new Date(),
       });
 
-      let message = `🎯 *META SEMANAL*\n\n`;
+      let message = `🎯 *PROGRESSO SEMANAL*\n\n`;
       
+      // Mostrar meta se existir
       if (user?.weeklyGoal) {
-        message += `📌 *Meta definida:* R$ ${user.weeklyGoal.toFixed(2)}/semana\n`;
-        message += `📅 *Meta diária:* R$ ${(user.weeklyGoal / 6).toFixed(2)}/dia\n\n`;
+        const percentage = (result.weeklyProfit / user.weeklyGoal) * 100;
+        const remaining = user.weeklyGoal - result.weeklyProfit;
+        
+        message += `📌 *Meta:* R$ ${user.weeklyGoal.toFixed(2)}/semana\n`;
+        message += `✅ *Progresso:* R$ ${result.weeklyProfit.toFixed(2)}\n`;
+        message += `📊 *Atingido:* ${percentage.toFixed(0)}%\n\n`;
+        
+        if (percentage >= 100) {
+          message += `🎉 *PARABÉNS!* Meta batida!\n`;
+          message += `🚀 Lucro extra: R$ ${Math.abs(remaining).toFixed(2)}\n\n`;
+        } else if (percentage >= 80) {
+          message += `👏 *Quase lá!* Falta R$ ${remaining.toFixed(2)}\n\n`;
+        } else if (percentage >= 50) {
+          message += `💪 *Continue firme!* Falta R$ ${remaining.toFixed(2)}\n\n`;
+        } else {
+          message += `⚠️ *Atenção!* Falta R$ ${remaining.toFixed(2)}\n\n`;
+        }
       } else {
         message += `⚠️ *Meta não definida*\n\n`;
       }
 
-      message += `💰 *Ganhos:* R$ ${result.weeklyEarnings.toFixed(2)}
-💸 *Custos Fixos:* R$ ${result.weeklyFixedCosts.toFixed(2)}
-⛽ *Custos Variáveis:* R$ ${result.weeklyVariableCosts.toFixed(2)}
-━━━━━━━━━━━━━━━━
-📊 *Total Custos:* R$ ${result.weeklyTotalCosts.toFixed(2)}
-✅ *Lucro:* R$ ${result.weeklyProfit.toFixed(2)}
+      message += `━━━━━━━━━━━━━━━━\n`;
+      message += `📈 *NÚMEROS DA SEMANA:*\n\n`;
+      message += `💰 Ganhos: R$ ${result.weeklyEarnings.toFixed(2)}\n`;
+      message += `💸 Custos Fixos: R$ ${result.weeklyFixedCosts.toFixed(2)}\n`;
+      message += `⛽ Custos Variáveis: R$ ${result.weeklyVariableCosts.toFixed(2)}\n`;
+      message += `━━━━━━━━━━━━━━━━\n`;
+      message += `📊 Total Custos: R$ ${result.weeklyTotalCosts.toFixed(2)}\n`;
+      message += `✅ Lucro Líquido: R$ ${result.weeklyProfit.toFixed(2)}\n\n`;
 
-${result.message}`;
+      // Breakeven (ponto de equilíbrio)
+      if (result.daysLeft > 0) {
+        if (result.remainingToBreakeven > 0) {
+          message += `💡 *Para cobrir custos:*\n`;
+          message += `Precisa de R$ ${result.dailyTargetToBreakeven.toFixed(2)}/dia\n`;
+          message += `(faltam ${result.daysLeft} dias)\n\n`;
+        }
+      }
 
       // Adicionar dica para definir/atualizar meta
       if (!user?.weeklyGoal) {
-        message += `\n\n💡 *Dica:* Defina sua meta semanal!\nExemplo: \`meta 2000\``;
+        message += `💡 *Defina sua meta:* \`meta 2000\``;
       } else {
-        message += `\n\n💡 Para alterar sua meta, digite:\n\`meta VALOR\` (ex: meta 2500)`;
+        message += `💡 *Alterar meta:* \`meta VALOR\``;
       }
 
       await this.sendMessage(session.phone, message);
@@ -1214,7 +1290,7 @@ ${result.message}`;
       logger.error('Error showing weekly progress', error);
       await this.sendMessage(
         session.phone,
-        '❌ Erro ao calcular meta. Certifique-se de ter registrado alguns dias.'
+        '❌ Erro ao calcular progresso. Certifique-se de ter registrado alguns dias.'
       );
     }
   }
@@ -1434,7 +1510,10 @@ Digite apenas o número (ex: 12):`;
         km: reg.km,
       });
 
-      // 2. Mensagem de sucesso e próximas opções
+      // 2. Verificar alerta de meta
+      await this.checkDailyGoalAlert(session);
+
+      // 3. Mensagem de sucesso e próximas opções
       const message = `✅ *Corrida registrada!*
 
 💰 Ganho: R$ ${reg.earnings.toFixed(2)}
@@ -1608,6 +1687,9 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
       message += `\n\n💡 *Dica:* Digite só os números para registrar rápido!\nExemplo: 45 12`;
 
       await this.sendMessage(session.phone, message);
+
+      // 3. Verificar alerta de meta
+      await this.checkDailyGoalAlert(session);
 
       // Limpar sessão
       session.state = ConversationState.IDLE;
@@ -2162,45 +2244,10 @@ Digite o código ou comando:`;
         km,
       });
 
-      // Montar mensagem
-      let message = `🤔 *VALE A PENA ESSA CORRIDA?*\n\n`;
-      message += `💰 *Ganho:* R$ ${result.earnings.toFixed(2)}\n`;
-      message += `🚗 *Distância:* ${result.km.toFixed(1)} km\n`;
-      message += `━━━━━━━━━━━━━━━━\n\n`;
-
-      message += `📊 *CUSTOS ESTIMADOS:*\n`;
-      message += `⛽ Combustível: R$ ${result.fuelCost.toFixed(2)}\n`;
-      message += `🔧 Manutenção: R$ ${result.maintenanceCost.toFixed(2)}\n`;
-      if (result.depreciationCost > 0) {
-        message += `📉 Depreciação: R$ ${result.depreciationCost.toFixed(2)}\n`;
-      }
-      message += `💸 *Total:* R$ ${result.totalCost.toFixed(2)}\n\n`;
-
-      message += `━━━━━━━━━━━━━━━━\n`;
-      message += `✅ *LUCRO:* R$ ${result.profit.toFixed(2)}\n`;
-      message += `📈 *Por KM:* R$ ${result.profitPerKm.toFixed(2)}/km\n\n`;
-
-      // Comparação com média
-      if (result.comparisonWithAverage) {
-        const diff = result.comparisonWithAverage.difference;
-        const diffPercent = (
-          (diff / result.comparisonWithAverage.userAverageProfitPerKm) *
-          100
-        ).toFixed(0);
-
-        message += `📊 *Sua média:* R$ ${result.comparisonWithAverage.userAverageProfitPerKm.toFixed(2)}/km\n`;
-
-        if (diff > 0) {
-          message += `📈 *${diffPercent}% acima* da sua média\n\n`;
-        } else if (diff < 0) {
-          message += `📉 *${Math.abs(parseFloat(diffPercent))}% abaixo* da sua média\n\n`;
-        } else {
-          message += `➡️ *Igual* à sua média\n\n`;
-        }
-      }
-
-      // Recomendação com emoji
-      message += `━━━━━━━━━━━━━━━━\n`;
+      // Montar mensagem CURTA
+      let message = `🤔 *${earnings.toFixed(0)} por ${km.toFixed(0)}km*\n\n`;
+      
+      // Resposta rápida
       if (result.recommendation === 'accept') {
         message += `✅ *ACEITE!*\n`;
       } else if (result.recommendation === 'reject') {
@@ -2208,7 +2255,23 @@ Digite o código ou comando:`;
       } else {
         message += `🤔 *VOCÊ DECIDE*\n`;
       }
-      message += `${result.message}`;
+      
+      message += `\n💰 Lucro: R$ ${result.profit.toFixed(2)}\n`;
+      message += `📊 Por KM: R$ ${result.profitPerKm.toFixed(2)}/km\n`;
+      message += `💸 Custos: R$ ${result.totalCost.toFixed(2)}\n\n`;
+
+      // Mensagem resumida
+      if (result.recommendation === 'accept') {
+        message += `✅ Boa corrida!`;
+      } else if (result.recommendation === 'reject') {
+        if (result.profitPerKm < 1.5) {
+          message += `⚠️ Lucro muito baixo. Espere melhor!`;
+        } else if (result.profit <= 0) {
+          message += `⛔ Prejuízo! Não aceite!`;
+        }
+      } else {
+        message += `🤔 Razoável. Aceite se estiver parado.`;
+      }
 
       await this.sendMessage(session.phone, message);
 
@@ -2238,6 +2301,55 @@ Digite o código ou comando:`;
   // ============================================
   // ATUALIZAÇÃO DE PREÇO DE COMBUSTÍVEL
   // ============================================
+
+  /**
+   * Verifica se deve enviar alerta sobre progresso da meta diária
+   */
+  private async checkDailyGoalAlert(session: ConversationSession): Promise<void> {
+    try {
+      if (!session.userId) return;
+
+      // Buscar usuário para pegar a meta
+      const user = await this.userRepository.findById(session.userId);
+      if (!user?.weeklyGoal) return; // Sem meta configurada
+
+      const dailyGoal = user.weeklyGoal / 6;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Buscar resumo do dia
+      const summary = await this.dailySummaryRepository.findByUserAndDate(
+        session.userId,
+        today
+      );
+
+      if (!summary) return;
+
+      const percentage = (summary.profit.value / dailyGoal) * 100;
+
+      // Alertar apenas se está abaixo de 50% e já rodou pelo menos 50km
+      if (percentage < 50 && summary.km.value >= 50) {
+        const remaining = dailyGoal - summary.profit.value;
+        let alert = `\n⚠️ *ALERTA DE META!*\n`;
+        alert += `Você rodou ${summary.km.value.toFixed(0)}km mas está em ${percentage.toFixed(0)}% da meta.\n`;
+        alert += `Faltam R$ ${remaining.toFixed(2)} para atingir hoje.\n`;
+        alert += `\n💡 *Dica:* Priorize corridas com lucro acima de R$ 2/km`;
+
+        await this.sendMessage(session.phone, alert);
+      } else if (percentage >= 80 && percentage < 100) {
+        // Motivação quando está perto
+        const remaining = dailyGoal - summary.profit.value;
+        let alert = `\n👏 *Quase lá!*\n`;
+        alert += `Você está em ${percentage.toFixed(0)}% da meta!\n`;
+        alert += `Faltam apenas R$ ${remaining.toFixed(2)}. Bora fechar o dia!`;
+
+        await this.sendMessage(session.phone, alert);
+      }
+    } catch (error) {
+      logger.error('Error checking daily goal alert', error);
+      // Não mostrar erro ao usuário, é apenas um alerta
+    }
+  }
 
   /**
    * Define ou atualiza a meta semanal do usuário

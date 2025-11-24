@@ -38,7 +38,7 @@ export class CalculateSuggestedGoal {
   private readonly DAILY_MAINTENANCE_COST = 10; // R$ 10/dia
   private readonly MONTHLY_INSURANCE_ESTIMATE = 200; // R$ 200/mês
   private readonly MONTHLY_IPVA_ESTIMATE = 100; // R$ 100/mês (proporcional)
-  private readonly PROFIT_MARGIN = 0.25; // 25% de margem de lucro sobre custos
+  private readonly PROFIT_MARGIN = 0.20; // 20% de margem de lucro sobre custos (REALISTA)
 
   constructor(
     private readonly driverConfigRepository: IDriverConfigRepository,
