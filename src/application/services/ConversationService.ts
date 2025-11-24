@@ -114,9 +114,10 @@ export class ConversationService {
       // NÍVEL 1: Comando "ok" - registra última PendingTrip
       // "ok" - registra corrida
       // "ok g30" - registra corrida + abasteceu R$ 30
+      // IMPORTANTE: Só processar se NÃO estiver em estado de confirmação
       const okMatch = normalizedText.match(/^ok(?:\s+g(\d+(?:[.,]\d+)?))?$/);
       
-      if (okMatch) {
+      if (okMatch && session.state !== ConversationState.REGISTER_CONFIRM) {
         session.state = ConversationState.IDLE;
         await this.handleOkCommand(session, okMatch);
         this.saveSession(session);
