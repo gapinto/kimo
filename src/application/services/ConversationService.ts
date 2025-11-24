@@ -230,14 +230,12 @@ export class ConversationService {
    */
   async processAudio(from: string, audioUrl: string): Promise<void> {
     try {
-      logger.info('Processing audio message', { from, audioUrl });
+      logger.info('Audio message received', { from, audioUrl });
 
       // Verificar se os serviços de IA estão disponíveis
       if (!this.audioTranscriptionService || !this.nlpService) {
-        await this.sendMessage(
-          from,
-          '❌ Desculpe, o processamento de áudio não está disponível no momento. Use texto.'
-        );
+        logger.info('Audio processing disabled - ignoring audio message', { from });
+        // Ignorar silenciosamente - não enviar nenhuma mensagem
         return;
       }
 
