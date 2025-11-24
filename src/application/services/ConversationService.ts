@@ -86,6 +86,15 @@ export class ConversationService {
       // DETECTAR COMANDOS RÁPIDOS PRIMEIRO (funcionam em qualquer estado)
       const normalizedText = text.toLowerCase().trim();
 
+      // Garantir que userId está definido para comandos rápidos
+      if (!session.userId) {
+        const phone = Phone.create(session.phone);
+        const existingUser = await this.userRepository.findByPhone(phone);
+        if (existingUser) {
+          session.userId = existingUser.id;
+        }
+      }
+
       // Comando rápido de corrida: "45 12" ou "45 12 5"
       const quickRegisterMatch = normalizedText.match(/^(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)(?:\s+(\d+(?:[.,]\d+)?))?$/);
       
