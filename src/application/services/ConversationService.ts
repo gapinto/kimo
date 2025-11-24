@@ -521,6 +521,9 @@ export class ConversationService {
       } else if (normalizedText.match(/^preco\s+(\d+(?:[.,]\d+)?)$/)) {
         // Comando para atualizar preço da gasolina: "preco 5.80"
         await this.updateFuelPrice(session, normalizedText);
+      } else if (normalizedText === 'comandos' || normalizedText === 'ajuda' || normalizedText === 'help') {
+        // Lista resumida de comandos
+        await this.showQuickCommandsList(session);
       } else {
         // Menu principal
         await this.showMainMenu(session, existingUser.name);
@@ -1468,6 +1471,33 @@ Ou digite qualquer texto para iniciar o passo a passo.
     }
   }
 
+  private async showQuickCommandsList(session: ConversationSession): Promise<void> {
+    const message = `⚡ *COMANDOS RÁPIDOS*
+
+🚗 *CORRIDAS:*
+• *v 45 12* → Vale a pena? (ultra rápido)
+• *aceitar* → Marcar que aceitou
+• *ok* → Registrar (ou *ok g30* se abasteceu)
+• *45 12* → Registrar diretamente
+
+📊 *CONSULTAS:*
+• *r* → Resumo do dia
+• *m* → Meta semanal
+• *g* → Gráficos
+
+💸 *DESPESAS:*
+• *g80* → Combustível R$ 80
+
+⚙️ *CONFIGURAÇÕES:*
+• *meta 2500* → Definir meta
+• *preco 5.80* → Atualizar gasolina
+• *descanso* / *ativo* → Controlar lembretes
+
+💡 Digite *menu* para ver todas as opções`;
+
+    await this.sendMessage(session.phone, message);
+  }
+
   private async showMainMenu(session: ConversationSession, name?: string): Promise<void> {
     const greeting = name ? `Olá, ${name}!` : 'Olá!';
     
@@ -1506,6 +1536,8 @@ Ou digite qualquer texto para iniciar o passo a passo.
 😴 *CONTROLE DE LEMBRETES:*
 • *descanso* → Pausar lembretes (quando parar)
 • *ativo* → Retomar lembretes (quando voltar)
+
+💡 *Digite comandos para ver lista resumida*
 
 📊 *Ou escolha uma opção:*`;
 
