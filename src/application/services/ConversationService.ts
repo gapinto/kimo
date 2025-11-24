@@ -578,12 +578,49 @@ export class ConversationService {
       } else if (normalizedText === 'menu completo') {
         // Menu completo (sempre mostra versão completa)
         await this.showMainMenu(session, existingUser.name);
-      } else {
-        // Menu adaptativo (simples para novos, completo para experientes)
+      } else if (normalizedText === 'silencioso' || normalizedText === 'quiet' || normalizedText === 'sem menu') {
+        // Ativar modo silencioso (não mostra menu automático)
+        session.data.quietMode = true;
+        await this.sendMessage(
+          session.phone,
+          '🔇 *Modo silencioso ativado*\n\n' +
+          'Não vou mais mostrar o menu automaticamente.\n\n' +
+          '💡 *Comandos úteis:*\n' +
+          '• `menu` → Ver menu quando quiser\n' +
+          '• `comandos` → Lista de atalhos\n' +
+          '• `normal` → Voltar ao modo normal'
+        );
+      } else if (normalizedText === 'normal' || normalizedText === 'com menu' || normalizedText === 'barulhento') {
+        // Desativar modo silencioso
+        session.data.quietMode = false;
+        await this.sendMessage(
+          session.phone,
+          '🔔 *Modo normal ativado*\n\n' +
+          'Voltei a mostrar o menu automaticamente!'
+        );
+      } else if (normalizedText === 'menu') {
+        // Mostrar menu sob demanda (funciona mesmo em modo silencioso)
         if (this.isNewUser(existingUser)) {
           await this.showSimpleMenu(session, existingUser.name);
-        } else {
+      } else {
         await this.showMainMenu(session, existingUser.name);
+      }
+      } else {
+        // Menu adaptativo (simples para novos, completo para experientes)
+        // Só mostra se NÃO estiver em modo silencioso
+        if (!session.data.quietMode) {
+          if (this.isNewUser(existingUser)) {
+            await this.showSimpleMenu(session, existingUser.name);
+          } else {
+            await this.showMainMenu(session, existingUser.name);
+          }
+        } else {
+          // Em modo silencioso, apenas confirma que recebeu
+          await this.sendMessage(
+            session.phone,
+            '❓ Comando não reconhecido.\n\n' +
+            '💡 Digite `menu` para ver os comandos disponíveis.'
+          );
         }
       }
     }
