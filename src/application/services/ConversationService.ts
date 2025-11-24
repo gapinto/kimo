@@ -230,6 +230,14 @@ export class ConversationService {
           await this.handleIdleState(session, text);
           break;
 
+        case ConversationState.ONBOARDING_NAME:
+          await this.handleOnboardingName(session, text);
+          break;
+
+        case ConversationState.ONBOARDING_BIRTH_DATE:
+          await this.handleOnboardingBirthDate(session, text);
+          break;
+
         case ConversationState.ONBOARDING_PROFILE:
           await this.handleOnboardingProfile(session, text);
           break;
@@ -576,7 +584,135 @@ export class ConversationService {
 
 Vou te fazer algumas perguntas rápidas para te ajudar melhor.
 
-*1️⃣ Você dirige com:*
+*Primeiro, qual é o seu nome?*
+
+_(Pode ser só o primeiro nome)_`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.ONBOARDING_NAME;
+  }
+
+  /**
+   * Processa nome do usuário
+   */
+  private async handleOnboardingName(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const name = text.trim();
+
+    // Validar nome
+    if (name.length < 2) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Nome muito curto. Digite seu nome:'
+      );
+      return;
+    }
+
+    if (name.length > 50) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Nome muito longo. Digite um nome mais curto:'
+      );
+      return;
+    }
+
+    // Verificar se contém apenas letras e espaços
+    if (!/^[a-zA-ZÀ-ÿ\s]+$/.test(name)) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Nome inválido. Use apenas letras. Digite seu nome:'
+      );
+      return;
+    }
+
+    // Salvar nome na sessão
+    session.data.name = name;
+
+    // Pedir data de nascimento
+    const message = `Prazer, *${name}*! 😊
+
+*Agora, qual é sua data de nascimento?*
+
+Digite no formato: DD/MM/AAAA
+_(Exemplo: 15/03/1990)_`;
+
+    await this.sendMessage(session.phone, message);
+    session.state = ConversationState.ONBOARDING_BIRTH_DATE;
+  }
+
+  /**
+   * Processa data de nascimento
+   */
+  private async handleOnboardingBirthDate(
+    session: ConversationSession,
+    text: string
+  ): Promise<void> {
+    const dateText = text.trim();
+
+    // Validar formato DD/MM/AAAA
+    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const match = dateText.match(dateRegex);
+
+    if (!match) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Formato inválido. Use DD/MM/AAAA\nExemplo: 15/03/1990'
+      );
+      return;
+    }
+
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+
+    // Validar se é uma data válida
+    const birthDate = new Date(year, month - 1, day);
+
+    if (
+      birthDate.getDate() !== day ||
+      birthDate.getMonth() !== month - 1 ||
+      birthDate.getFullYear() !== year
+    ) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Data inválida. Digite uma data válida:'
+      );
+      return;
+    }
+
+    // Verificar se não é data futura
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (birthDate > today) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Data de nascimento não pode ser no futuro. Digite novamente:'
+      );
+      return;
+    }
+
+    // Calcular idade
+    const age = Math.floor((today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+
+    // Verificar idade mínima (18 anos)
+    if (age < 18) {
+      await this.sendMessage(
+        session.phone,
+        '❌ Você precisa ter pelo menos 18 anos para usar o KIMO.'
+      );
+      return;
+    }
+
+    // Salvar data de nascimento na sessão
+    session.data.birthDate = birthDate;
+
+    // Continuar para perfil do motorista
+    const message = `Ótimo! 🎉
+
+*Agora me diga, você dirige com:*
 
 1 - Carro próprio quitado
 2 - Carro próprio financiado
@@ -884,10 +1020,12 @@ Digite apenas o número (ex: 150):`;
 
   private async completeOnboarding(session: ConversationSession): Promise<void> {
     try {
-      // 1. Criar usuário
+      // 1. Criar usuário com nome e data de nascimento
       const createUser = new CreateUser(this.userRepository);
       const userResult = await createUser.execute({
         phone: session.phone,
+        name: session.data.name as string,
+        birthDate: session.data.birthDate as Date,
       });
 
       session.userId = userResult.userId;
@@ -939,7 +1077,8 @@ Digite apenas o número (ex: 150):`;
       logger.info('Onboarding completed', { userId: userResult.userId, goalData });
 
       // 6. Montar mensagem de sucesso com breakdown detalhado
-      let message = `🎉 *Perfil configurado com sucesso!*\n\n`;
+      const userName = session.data.name as string;
+      let message = `🎉 *Perfil configurado com sucesso, ${userName}!*\n\n`;
       
       message += `📋 *Resumo do seu perfil:*\n`;
       message += `👤 ${session.data.profileName}\n`;

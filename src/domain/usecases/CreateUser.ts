@@ -5,6 +5,7 @@ import { Phone } from '../value-objects/Phone';
 export interface CreateUserInput {
   phone: string;
   name?: string;
+  birthDate?: Date;
   weeklyGoal?: number;
 }
 
@@ -46,6 +47,7 @@ export class CreateUser {
     const user = User.create({
       phone,
       name: input.name,
+      birthDate: input.birthDate,
       weeklyGoal: input.weeklyGoal,
     });
 
