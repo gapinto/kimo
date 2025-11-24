@@ -107,7 +107,7 @@ export class EvaluateTrip {
   private calculateFuelCost(km: number, driverConfig: any): number {
     // consumo em km/l, preço em R$/l
     const litersNeeded = km / driverConfig.fuelConsumption;
-    return litersNeeded * driverConfig.fuelPrice;
+    return litersNeeded * driverConfig.avgFuelPrice.value;
   }
 
   private calculateDepreciationCost(km: number, driverConfig: any): number {
@@ -117,7 +117,8 @@ export class EvaluateTrip {
 
     // Depreciação: 15% ao ano ou 50.000 km/ano
     // Aproximadamente R$ 0.30 a R$ 0.50 por km dependendo do valor do carro
-    const annualDepreciation = driverConfig.carValue * 0.15;
+    const carValueAmount = driverConfig.carValue.value;
+    const annualDepreciation = carValueAmount * 0.15;
     const depreciationPerKm = annualDepreciation / 50000;
     return km * depreciationPerKm;
   }
