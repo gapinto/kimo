@@ -152,15 +152,22 @@ export class SchedulerService {
 
           let message = `📅 *RESUMO DA SEMANA*\n\n`;
           message += `💰 Total ganho: R$ ${progress.totalProfit.toFixed(2)}\n`;
-          message += `🎯 Meta semanal: R$ ${progress.weeklyGoal?.toFixed(2) || 'Não definida'}\n`;
-          message += `📊 Atingido: ${progress.percentageComplete.toFixed(0)}%\n\n`;
+          
+          if (progress.weeklyGoal) {
+            message += `🎯 Meta semanal: R$ ${progress.weeklyGoal.toFixed(2)}\n`;
+            message += `📊 Atingido: ${progress.percentageComplete.toFixed(0)}%\n\n`;
 
-          if (progress.percentageComplete >= 100) {
-            message += `🎉 *PARABÉNS!* Você bateu a meta!\n\n`;
-          } else if (progress.percentageComplete >= 80) {
-            message += `👏 *Quase lá!* Falta só R$ ${progress.remainingToGoal.toFixed(2)}\n\n`;
+            if (progress.percentageComplete >= 100) {
+              message += `🎉 *PARABÉNS!* Você bateu a meta!\n\n`;
+            } else if (progress.percentageComplete >= 80) {
+              message += `👏 *Quase lá!* Falta só R$ ${progress.remainingToGoal.toFixed(2)}\n\n`;
+            } else {
+              message += `💪 Continue firme! Faltam R$ ${progress.remainingToGoal.toFixed(2)}\n\n`;
+            }
           } else {
-            message += `💪 Continue firme! Faltam R$ ${progress.remainingToGoal.toFixed(2)}\n\n`;
+            message += `⚠️ *Meta não definida*\n\n`;
+            message += `💡 *Dica:* Configure suas metas para ter melhor controle!\n`;
+            message += `Digite *oi* para recalcular suas metas sugeridas.\n\n`;
           }
 
           message += `Dias trabalhados: ${progress.daysWithData}/7\n\n`;

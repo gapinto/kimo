@@ -810,9 +810,16 @@ Digite apenas o número (ex: 150):`;
       
       const goalData = await calculateGoal.execute({ userId: userResult.userId });
 
+      // 5. Salvar meta semanal no usuário
+      const user = await this.userRepository.findById(userResult.userId);
+      if (user) {
+        user.updateWeeklyGoal(goalData.suggestedWeeklyGoal);
+        await this.userRepository.update(user);
+      }
+
       logger.info('Onboarding completed', { userId: userResult.userId, goalData });
 
-      // 5. Montar mensagem de sucesso com breakdown detalhado
+      // 6. Montar mensagem de sucesso com breakdown detalhado
       let message = `🎉 *Perfil configurado com sucesso!*\n\n`;
       
       message += `📋 *Resumo do seu perfil:*\n`;
