@@ -129,6 +129,16 @@ export class ConversationService {
         return;
       }
 
+      // Comando para definir/atualizar meta: "meta 2000" ou "definir meta 2000"
+      const setGoalMatch = normalizedText.match(/^(?:meta|definir meta)\s+(\d+(?:[.,]\d+)?)$/);
+      
+      if (setGoalMatch) {
+        session.state = ConversationState.IDLE;
+        await this.handleSetGoal(session, setGoalMatch);
+        this.saveSession(session);
+        return;
+      }
+
       // Histórico
       if (normalizedText === 'ontem' || normalizedText === 'yesterday') {
         session.state = ConversationState.IDLE;
@@ -846,7 +856,8 @@ Digite apenas o número (ex: 150):`;
 
       message += `🎯 *Metas Sugeridas:*\n`;
       message += `📅 *Meta Diária: R$ ${goalData.suggestedDailyGoal.toFixed(2)}*\n`;
-      message += `📆 *Meta Semanal: R$ ${goalData.suggestedWeeklyGoal.toFixed(2)}*\n\n`;
+      message += `📆 *Meta Semanal: R$ ${goalData.suggestedWeeklyGoal.toFixed(2)}*\n`;
+      message += `\n💡 Para alterar sua meta: \`meta VALOR\`\n\n`;
 
       message += `💵 *Lucro Projetado:*\n`;
       message += `• Por dia: R$ ${goalData.dailyProfit.toFixed(2)}\n`;
@@ -861,7 +872,8 @@ Digite apenas o número (ex: 150):`;
       message += `• *g80* → Combustível\n`;
       message += `  _(R$80 de gasolina)_\n\n`;
       message += `• *r* → Resumo do dia\n`;
-      message += `• *m* → Ver meta semanal\n\n`;
+      message += `• *m* → Ver meta semanal\n`;
+      message += `• *meta 2500* → Alterar meta\n\n`;
 
       message += `👉 Digite *oi* ou *menu* a qualquer momento!`;
 
@@ -1158,6 +1170,9 @@ Ou digite qualquer texto para iniciar o passo a passo.
         return;
       }
 
+      // Buscar usuário para pegar a meta
+      const user = await this.userRepository.findById(session.userId);
+
       const calculateBreakeven = new CalculateBreakeven(
         this.driverConfigRepository,
         this.fixedCostRepository,
@@ -1169,9 +1184,16 @@ Ou digite qualquer texto para iniciar o passo a passo.
         referenceDate: new Date(),
       });
 
-      const message = `🎯 *META SEMANAL*
+      let message = `🎯 *META SEMANAL*\n\n`;
+      
+      if (user?.weeklyGoal) {
+        message += `📌 *Meta definida:* R$ ${user.weeklyGoal.toFixed(2)}/semana\n`;
+        message += `📅 *Meta diária:* R$ ${(user.weeklyGoal / 6).toFixed(2)}/dia\n\n`;
+      } else {
+        message += `⚠️ *Meta não definida*\n\n`;
+      }
 
-💰 *Ganhos:* R$ ${result.weeklyEarnings.toFixed(2)}
+      message += `💰 *Ganhos:* R$ ${result.weeklyEarnings.toFixed(2)}
 💸 *Custos Fixos:* R$ ${result.weeklyFixedCosts.toFixed(2)}
 ⛽ *Custos Variáveis:* R$ ${result.weeklyVariableCosts.toFixed(2)}
 ━━━━━━━━━━━━━━━━
@@ -1179,6 +1201,13 @@ Ou digite qualquer texto para iniciar o passo a passo.
 ✅ *Lucro:* R$ ${result.weeklyProfit.toFixed(2)}
 
 ${result.message}`;
+
+      // Adicionar dica para definir/atualizar meta
+      if (!user?.weeklyGoal) {
+        message += `\n\n💡 *Dica:* Defina sua meta semanal!\nExemplo: \`meta 2000\``;
+      } else {
+        message += `\n\n💡 Para alterar sua meta, digite:\n\`meta VALOR\` (ex: meta 2500)`;
+      }
 
       await this.sendMessage(session.phone, message);
     } catch (error) {
@@ -1307,6 +1336,8 @@ ${result.message}`;
 
 • *r* → Resumo do dia
 • *m* → Ver meta semanal
+• *meta 2000* → Definir meta de R$ 2000/semana
+• *preco 5.80* → Atualizar preço da gasolina
 • *g* → Ver gráficos 📊
 
 📊 *Ou escolha uma opção:*`;
@@ -2207,6 +2238,82 @@ Digite o código ou comando:`;
   // ============================================
   // ATUALIZAÇÃO DE PREÇO DE COMBUSTÍVEL
   // ============================================
+
+  /**
+   * Define ou atualiza a meta semanal do usuário
+   */
+  private async handleSetGoal(session: ConversationSession, match: RegExpMatchArray): Promise<void> {
+    try {
+      if (!session.userId) {
+        await this.sendMessage(session.phone, '❌ Erro: usuário não encontrado.');
+        return;
+      }
+
+      // Extrair valor da meta
+      const newGoal = parseFloat(match[1].replace(',', '.'));
+
+      if (isNaN(newGoal) || newGoal <= 0 || newGoal > 100000) {
+        await this.sendMessage(
+          session.phone,
+          '❌ Valor inválido. Digite um valor entre R$ 1 e R$ 100.000\n\nExemplo: `meta 2000`'
+        );
+        return;
+      }
+
+      // Buscar usuário
+      const user = await this.userRepository.findById(session.userId);
+
+      if (!user) {
+        await this.sendMessage(
+          session.phone,
+          '⚠️ Usuário não encontrado.'
+        );
+        return;
+      }
+
+      const oldGoal = user.weeklyGoal;
+
+      // Atualizar meta
+      user.updateWeeklyGoal(newGoal);
+      await this.userRepository.update(user);
+
+      // Calcular meta diária
+      const dailyGoal = newGoal / 6; // considerando 6 dias de trabalho
+
+      let message = `✅ *Meta semanal atualizada!*\n\n`;
+      
+      if (oldGoal) {
+        message += `🔄 Antes: R$ ${oldGoal.toFixed(2)}/semana\n`;
+        message += `🎯 Agora: R$ ${newGoal.toFixed(2)}/semana\n\n`;
+        
+        const diff = newGoal - oldGoal;
+        if (diff > 0) {
+          message += `📈 Aumento de R$ ${diff.toFixed(2)} (${((diff / oldGoal) * 100).toFixed(1)}%)\n\n`;
+        } else {
+          message += `📉 Redução de R$ ${Math.abs(diff).toFixed(2)} (${((Math.abs(diff) / oldGoal) * 100).toFixed(1)}%)\n\n`;
+        }
+      } else {
+        message += `🎯 Nova meta: R$ ${newGoal.toFixed(2)}/semana\n\n`;
+      }
+
+      message += `📅 *Meta diária:* R$ ${dailyGoal.toFixed(2)}\n`;
+      message += `💪 Vamos alcançar juntos!`;
+
+      await this.sendMessage(session.phone, message);
+
+      logger.info('Weekly goal updated', {
+        userId: session.userId,
+        oldGoal,
+        newGoal,
+      });
+    } catch (error) {
+      logger.error('Error updating weekly goal', error);
+      await this.sendMessage(
+        session.phone,
+        '❌ Erro ao atualizar meta. Tente novamente.'
+      );
+    }
+  }
 
   /**
    * Atualiza o preço da gasolina do motorista
