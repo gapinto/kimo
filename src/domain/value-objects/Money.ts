@@ -16,10 +16,7 @@ export class Money {
       throw new Error('Amount must be a valid number');
     }
 
-    if (amount < 0) {
-      throw new Error('Amount cannot be negative');
-    }
-
+    // Permite valores negativos (para lucro negativo, prejuízo)
     // Arredonda para 2 casas decimais
     const rounded = Math.round(amount * 100) / 100;
     return new Money(rounded);
