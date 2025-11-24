@@ -2628,9 +2628,10 @@ Digite o código ou comando:`;
         } else {
           message = `🤔 OK. R$ ${result.profit.toFixed(0)} lucro (R$ ${result.profitPerKm.toFixed(1)}/km)`;
         }
-        // Adicionar dica sobre comando "ok"
-        message += `\n\n💡 Depois digite *ok*\n`;
-        message += `   (Se abasteceu: *ok g30*, *ok g50*, etc)`;
+        // Adicionar opções de resposta
+        message += `\n\n💡 *Decidiu:*\n`;
+        message += `✅ *ok* → Aceitou\n`;
+        message += `❌ *cancelar* → Não aceitou`;
       } else if (isFull) {
         // VERSÃO COMPLETA - Com todos os detalhes
         // Uso: "vale? 45 12"
@@ -2654,6 +2655,11 @@ Digite o código ou comando:`;
         } else {
           message += `🤔 *RAZOÁVEL*. Aceite se parado.`;
         }
+        
+        // Adicionar opções de resposta
+        message += `\n\n💡 *Decidiu:*\n`;
+        message += `✅ *ok* → Aceitou\n`;
+        message += `❌ *cancelar* → Não aceitou`;
       } else {
         // VERSÃO CURTA PADRÃO - Balanceada
         // Uso: "vale 45 12"
@@ -2682,6 +2688,11 @@ Digite o código ou comando:`;
         } else {
           message += `🤔 Razoável. Aceite se estiver parado.`;
         }
+        
+        // Adicionar opções de resposta
+        message += `\n\n💡 *Decidiu:*\n`;
+        message += `✅ *ok* → Aceitou\n`;
+        message += `❌ *cancelar* → Não aceitou`;
       }
 
       await this.sendMessage(session.phone, message);
