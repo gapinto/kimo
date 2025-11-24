@@ -1434,55 +1434,82 @@ Ou digite qualquer texto para iniciar o passo a passo.
         today
       );
 
+      // Calcular custos fixos diários
+      const calculateGoal = new CalculateSuggestedGoal(
+        this.driverConfigRepository,
+        this.fixedCostRepository
+      );
+      const goalData = await calculateGoal.execute({ userId: session.userId });
+
       let message = `📊 *RESUMO DE HOJE*\n${today.toLocaleDateString('pt-BR')}\n\n`;
 
       if (summary) {
         message += `💰 *Ganhos:* R$ ${summary.earnings.value.toFixed(2)}\n`;
-        message += `💸 *Despesas:* R$ ${summary.expenses.value.toFixed(2)}\n`;
+        message += `💸 *Despesas diretas:* R$ ${summary.expenses.value.toFixed(2)}\n`;
         message += `━━━━━━━━━━━━━━━━\n`;
-        message += `✅ *Lucro:* R$ ${summary.profit.value.toFixed(2)}\n\n`;
+        message += `✅ *Lucro operacional:* R$ ${summary.profit.value.toFixed(2)}\n\n`;
+
+        // Mostrar custos fixos do dia
+        message += `📌 *CUSTOS FIXOS DO DIA:*\n`;
+        message += `🔧 Manutenção: R$ ${goalData.dailyMaintenanceCost.toFixed(2)}\n`;
+        if (goalData.dailyDepreciationCost > 0) {
+          message += `📉 Depreciação: R$ ${goalData.dailyDepreciationCost.toFixed(2)}\n`;
+        }
+        message += `💳 Fixos (aluguel/parcela): R$ ${goalData.dailyFixedCosts.toFixed(2)}\n`;
+        message += `━━━━━━━━━━━━━━━━\n`;
+        message += `💸 *Total custos fixos:* R$ ${(goalData.dailyMaintenanceCost + goalData.dailyDepreciationCost + goalData.dailyFixedCosts).toFixed(2)}\n\n`;
+
+        // Calcular lucro real
+        const totalFixedCosts = goalData.dailyMaintenanceCost + goalData.dailyDepreciationCost + goalData.dailyFixedCosts;
+        const realProfit = summary.profit.value - totalFixedCosts;
+
+        message += `━━━━━━━━━━━━━━━━\n`;
+        if (realProfit >= 0) {
+          message += `💚 *LUCRO REAL:* R$ ${realProfit.toFixed(2)}\n\n`;
+        } else {
+          message += `📊 *LUCRO REAL:* -R$ ${Math.abs(realProfit).toFixed(2)}\n\n`;
+          message += `⚠️ Você ainda está *R$ ${Math.abs(realProfit).toFixed(2)}*\n`;
+          message += `   abaixo do necessário para cobrir custos!\n\n`;
+        }
 
         // Comparar com meta diária
         if (dailyGoal) {
-          const percentage = (summary.profit.value / dailyGoal) * 100;
+          const percentage = (realProfit / dailyGoal) * 100;
           message += `🎯 *Meta do dia:* R$ ${dailyGoal.toFixed(2)}\n`;
           message += `📊 *Atingido:* ${percentage.toFixed(0)}%\n\n`;
 
           if (percentage >= 100) {
-            const extra = summary.profit.value - dailyGoal;
+            const extra = realProfit - dailyGoal;
             message += `🎉 *Meta batida!* +R$ ${extra.toFixed(2)}\n\n`;
           } else if (percentage >= 80) {
-            const remaining = dailyGoal - summary.profit.value;
+            const remaining = dailyGoal - realProfit;
             message += `👏 *Quase lá!* Falta R$ ${remaining.toFixed(2)}\n\n`;
           } else if (percentage >= 50) {
-            const remaining = dailyGoal - summary.profit.value;
+            const remaining = dailyGoal - realProfit;
             message += `💪 *Continue!* Falta R$ ${remaining.toFixed(2)}\n\n`;
           } else {
-            const remaining = dailyGoal - summary.profit.value;
+            const remaining = dailyGoal - realProfit;
             message += `⚠️ *Atenção!* Falta R$ ${remaining.toFixed(2)}\n\n`;
           }
         }
 
         message += `🚗 *KM rodados:* ${summary.km.value.toFixed(1)} km\n`;
-        if (summary.costPerKm) {
-          message += `📊 *Custo por KM:* R$ ${summary.costPerKm.value.toFixed(2)}\n`;
-        }
         
-        // Calcular lucro por KM
+        // Calcular lucro por KM (baseado no lucro real)
         if (summary.km.value > 0) {
-          const profitPerKm = summary.profit.value / summary.km.value;
-          message += `💵 *Lucro por KM:* R$ ${profitPerKm.toFixed(2)}\n`;
+          const profitPerKm = realProfit / summary.km.value;
+          message += `💵 *Lucro real por KM:* R$ ${profitPerKm.toFixed(2)}\n`;
           
           // Gerar insight baseado no lucro/km
           message += `\n💡 *INSIGHT:*\n`;
-          if (profitPerKm >= 2.5) {
+          if (profitPerKm >= 1.5) {
             message += `Excelente! Lucro/km está ótimo. Continue priorizando corridas assim!`;
-          } else if (profitPerKm >= 1.5) {
-            message += `Bom lucro/km. Tente aceitar mais corridas acima de R$ 2/km.`;
-          } else if (profitPerKm >= 1.0) {
-            message += `⚠️ Lucro/km baixo. Avalie corridas antes com \`vale VALOR KM\` e evite as de lucro baixo.`;
+          } else if (profitPerKm >= 0.8) {
+            message += `Bom lucro/km. Tente aceitar mais corridas acima de R$ 1.50/km.`;
+          } else if (profitPerKm >= 0) {
+            message += `⚠️ Lucro/km baixo. Avalie corridas antes com \`v VALOR KM\` e evite as de lucro baixo.`;
           } else {
-            message += `🚨 Lucro/km muito baixo! Você rodou ${summary.km.value.toFixed(0)}km mas lucrou pouco. Foque em corridas mais rentáveis.`;
+            message += `🚨 Prejuízo! Você rodou ${summary.km.value.toFixed(0)}km mas está no negativo. Foque em corridas mais rentáveis e reduza custos.`;
           }
         }
       } else {
@@ -1973,50 +2000,6 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
     session.state = ConversationState.REGISTER_CONFIRM;
   }
 
-  private async handleRegisterConfirm(
-    session: ConversationSession,
-    text: string
-  ): Promise<void> {
-    const option = text.trim().toLowerCase();
-
-    // Cancelar
-    if (option === '2' || option.includes('não') || option.includes('nao') || option === 'n') {
-      await this.sendMessage(session.phone, '❌ Registro cancelado.');
-      session.state = ConversationState.IDLE;
-      session.data.registration = {};
-      session.data.quickRegisterConfirmation = undefined;
-      return;
-    }
-
-    // Validar confirmação
-    if (option !== '1' && !option.includes('sim') && option !== 's') {
-      await this.sendMessage(
-        session.phone,
-        '❌ Opção inválida. Digite *sim* ou *não*:'
-      );
-      return;
-    }
-
-    // Verificar se é confirmação de registro rápido
-    const quickReg = session.data.quickRegisterConfirmation as any;
-    
-    if (quickReg) {
-      await this.saveQuickRegister(session, quickReg);
-      return;
-    }
-
-    // Verificar se é confirmação de despesa rápida
-    const quickExpense = session.data.quickExpenseConfirmation as any;
-    
-    if (quickExpense) {
-      await this.saveQuickExpense(session, quickExpense);
-      return;
-    }
-
-    // Caso contrário, fluxo normal (registro passo a passo)
-    await this.saveNormalRegister(session);
-  }
-
   /**
    * Salva registro rápido confirmado
    */
@@ -2274,8 +2257,9 @@ ${otherExpenses > 0 ? `💸 Outras despesas: R$ ${otherExpenses.toFixed(2)}\n` :
     return isNaN(parsed) ? null : parsed;
   }
 
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  private async sleep(ms: number): Promise<void> {
+    // eslint-disable-next-line no-promise-executor-return
+    return new Promise((resolve) => (globalThis as any).setTimeout(resolve, ms));
   }
 
   /**
@@ -3539,36 +3523,55 @@ Digite o código ou comando:`;
         endOfDay
       );
 
-      if (expenses.length === 0) {
-        await this.sendMessage(
-          session.phone,
-          '📭 *Nenhuma despesa hoje*\n\nRegistre com: *g80*'
-        );
-        return;
-      }
+      // Calcular custos fixos diários
+      const calculateGoal = new CalculateSuggestedGoal(
+        this.driverConfigRepository,
+        this.fixedCostRepository
+      );
+      const goalData = await calculateGoal.execute({ userId: session.userId });
 
       let message = `💸 *DESPESAS DE HOJE*\n${today.toLocaleDateString('pt-BR')}\n\n`;
 
-      let total = 0;
+      if (expenses.length === 0) {
+        message += `📭 *Nenhuma despesa variável registrada*\n\n`;
+      } else {
+        message += `📝 *DESPESAS VARIÁVEIS:*\n\n`;
 
-      expenses.forEach((expense, index) => {
-        const time = expense.date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        const typeEmoji = this.getExpenseEmoji(expense.type);
-        const typeName = this.getExpenseTypeName(expense.type);
-        
-        message += `${index + 1}. *${time}* ${typeEmoji} ${typeName}\n`;
-        message += `   R$ ${expense.amount.value.toFixed(2)}`;
-        if (expense.note) {
-          message += ` - ${expense.note}`;
-        }
-        message += `\n`;
-        
-        total += expense.amount.value;
-      });
+        let total = 0;
 
+        expenses.forEach((expense, index) => {
+          const time = expense.date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          const typeEmoji = this.getExpenseEmoji(expense.type);
+          const typeName = this.getExpenseTypeName(expense.type);
+          
+          message += `${index + 1}. *${time}* ${typeEmoji} ${typeName}\n`;
+          message += `   R$ ${expense.amount.value.toFixed(2)}`;
+          if (expense.note) {
+            message += ` - ${expense.note}`;
+          }
+          message += `\n`;
+          
+          total += expense.amount.value;
+        });
+
+        message += `\n━━━━━━━━━━━━━━━━\n`;
+        message += `💸 *Total variável:* R$ ${total.toFixed(2)}\n\n`;
+      }
+
+      // Adicionar seção de custos fixos
+      message += `📌 *CUSTOS FIXOS (estimados):*\n\n`;
+      message += `🔧 Manutenção: R$ ${goalData.dailyMaintenanceCost.toFixed(2)}\n`;
+      if (goalData.dailyDepreciationCost > 0) {
+        message += `📉 Depreciação: R$ ${goalData.dailyDepreciationCost.toFixed(2)}\n`;
+      }
+      if (goalData.dailyFixedCosts > 0) {
+        message += `💳 Fixos (aluguel/parcela): R$ ${goalData.dailyFixedCosts.toFixed(2)}\n`;
+      }
       message += `\n━━━━━━━━━━━━━━━━\n`;
-      message += `📊 *Total:* ${expenses.length} despesas\n`;
-      message += `💸 *Valor:* R$ ${total.toFixed(2)}`;
+      message += `📊 *Total fixos:* R$ ${(goalData.dailyMaintenanceCost + goalData.dailyDepreciationCost + goalData.dailyFixedCosts).toFixed(2)}\n\n`;
+
+      message += `💡 _Custos fixos são calculados automaticamente_\n`;
+      message += `_baseados no seu perfil e carro._`;
 
       await this.sendMessage(session.phone, message);
     } catch (error) {
@@ -3598,43 +3601,72 @@ Digite o código ou comando:`;
         endOfMonth
       );
 
-      if (expenses.length === 0) {
-        await this.sendMessage(
-          session.phone,
-          '📭 *Nenhuma despesa este mês*\n\n' + 
-          startOfMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-        );
-        return;
-      }
+      // Calcular custos fixos mensais
+      const calculateGoal = new CalculateSuggestedGoal(
+        this.driverConfigRepository,
+        this.fixedCostRepository
+      );
+      const goalData = await calculateGoal.execute({ userId: session.userId });
+      
+      // Calcular dias úteis do mês (assumindo 6 dias trabalhados por semana = ~26 dias/mês)
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const workingDaysInMonth = Math.floor((daysInMonth / 7) * 6); // ~26 dias
+      const monthlyFixedCosts = {
+        maintenance: goalData.dailyMaintenanceCost * workingDaysInMonth,
+        depreciation: goalData.dailyDepreciationCost * workingDaysInMonth,
+        fixed: goalData.dailyFixedCosts * workingDaysInMonth,
+      };
 
       const monthName = startOfMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       let message = `💸 *DESPESAS DE ${monthName.toUpperCase()}*\n\n`;
 
-      // Agrupar por tipo
-      const byType = new Map<ExpenseType, number>();
-      let total = 0;
+      if (expenses.length === 0) {
+        message += `📭 *Nenhuma despesa variável registrada*\n\n`;
+      } else {
+        message += `📝 *DESPESAS VARIÁVEIS:*\n\n`;
 
-      expenses.forEach((expense) => {
-        const current = byType.get(expense.type) || 0;
-        byType.set(expense.type, current + expense.amount.value);
-        total += expense.amount.value;
-      });
+        // Agrupar por tipo
+        const byType = new Map<ExpenseType, number>();
+        let total = 0;
 
-      // Ordenar por valor
-      const sorted = Array.from(byType.entries()).sort((a, b) => b[1] - a[1]);
+        expenses.forEach((expense) => {
+          const current = byType.get(expense.type) || 0;
+          byType.set(expense.type, current + expense.amount.value);
+          total += expense.amount.value;
+        });
 
-      sorted.forEach(([type, amount]) => {
-        const emoji = this.getExpenseEmoji(type);
-        const typeName = this.getExpenseTypeName(type);
-        const percentage = (amount / total) * 100;
-        
-        message += `${emoji} *${typeName}*\n`;
-        message += `   R$ ${amount.toFixed(2)} (${percentage.toFixed(1)}%)\n\n`;
-      });
+        // Ordenar por valor
+        const sorted = Array.from(byType.entries()).sort((a, b) => b[1] - a[1]);
 
-      message += `━━━━━━━━━━━━━━━━\n`;
-      message += `📊 *Total:* ${expenses.length} despesas\n`;
-      message += `💸 *Valor:* R$ ${total.toFixed(2)}`;
+        sorted.forEach(([type, amount]) => {
+          const emoji = this.getExpenseEmoji(type);
+          const typeName = this.getExpenseTypeName(type);
+          const percentage = (amount / total) * 100;
+          
+          message += `${emoji} *${typeName}*\n`;
+          message += `   R$ ${amount.toFixed(2)} (${percentage.toFixed(1)}%)\n\n`;
+        });
+
+        message += `━━━━━━━━━━━━━━━━\n`;
+        message += `💸 *Total variável:* R$ ${total.toFixed(2)}\n\n`;
+      }
+
+      // Adicionar seção de custos fixos do mês
+      message += `📌 *CUSTOS FIXOS (estimados para ~${workingDaysInMonth} dias):*\n\n`;
+      message += `🔧 Manutenção: R$ ${monthlyFixedCosts.maintenance.toFixed(2)}\n`;
+      if (monthlyFixedCosts.depreciation > 0) {
+        message += `📉 Depreciação: R$ ${monthlyFixedCosts.depreciation.toFixed(2)}\n`;
+      }
+      if (monthlyFixedCosts.fixed > 0) {
+        message += `💳 Fixos (aluguel/parcela): R$ ${monthlyFixedCosts.fixed.toFixed(2)}\n`;
+      }
+      message += `\n━━━━━━━━━━━━━━━━\n`;
+      
+      const totalFixedCosts = monthlyFixedCosts.maintenance + monthlyFixedCosts.depreciation + monthlyFixedCosts.fixed;
+      message += `📊 *Total fixos:* R$ ${totalFixedCosts.toFixed(2)}\n\n`;
+
+      message += `💡 _Custos fixos são calculados automaticamente_\n`;
+      message += `_para ${workingDaysInMonth} dias úteis no mês._`;
 
       await this.sendMessage(session.phone, message);
     } catch (error) {
