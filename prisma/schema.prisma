@@ -28,6 +28,7 @@ model User {
   expenses       Expense[]
   fixedCosts     FixedCost[]
   dailySummaries DailySummary[]
+  pendingTrips   PendingTrip[]
 
   @@map("users")
 }
@@ -148,4 +149,29 @@ model DailySummary {
   @@index([userId, date])
   @@index([date])
   @@map("daily_summaries")
+}
+
+// ============================================
+// PENDING TRIP (Corrida Pendente de Registro)
+// ============================================
+model PendingTrip {
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  earnings          Decimal   @db.Decimal(10, 2)
+  km                Float
+  fuel              Decimal?  @db.Decimal(10, 2)
+  estimatedDuration Int       @map("estimated_duration") // minutos
+  status            String    @default("pending") // pending, in_progress, completed, cancelled
+  evaluatedAt       DateTime  @map("evaluated_at") // quando avaliou (v 45 12)
+  completedAt       DateTime? @map("completed_at") // quando registrou de fato
+  reminderSentAt    DateTime? @map("reminder_sent_at") // quando enviou lembrete
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([status, evaluatedAt])
+  @@map("pending_trips")
 }

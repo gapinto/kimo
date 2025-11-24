@@ -8,6 +8,7 @@ import { PrismaFixedCostRepository } from '../../database/repositories/PrismaFix
 import { PrismaTripRepository } from '../../database/repositories/PrismaTripRepository';
 import { PrismaExpenseRepository } from '../../database/repositories/PrismaExpenseRepository';
 import { PrismaDailySummaryRepository } from '../../database/repositories/PrismaDailySummaryRepository';
+import { PrismaPendingTripRepository } from '../../database/repositories/PrismaPendingTripRepository';
 import { prisma } from '../../database/prisma';
 import { env } from '../../../shared/utils/env';
 
@@ -24,6 +25,7 @@ export function createWhatsAppRoutes(): Router {
   const tripRepository = new PrismaTripRepository(prisma);
   const expenseRepository = new PrismaExpenseRepository(prisma);
   const dailySummaryRepository = new PrismaDailySummaryRepository(prisma);
+  const pendingTripRepository = new PrismaPendingTripRepository(prisma);
 
   // Messaging Provider
   const messagingProvider = new EvolutionAPIProvider({
@@ -41,6 +43,7 @@ export function createWhatsAppRoutes(): Router {
     tripRepository,
     expenseRepository,
     dailySummaryRepository,
+    pendingTripRepository,
     env.ai.groqApiKey,
     env.ai.deepseekApiKey
   );
