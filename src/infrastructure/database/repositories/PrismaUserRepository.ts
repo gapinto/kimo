@@ -90,6 +90,8 @@ export class PrismaUserRepository implements IUserRepository {
         phone: Phone.create(row.phone),
         name: row.name ?? undefined,
         subscriptionPlan: SubscriptionPlan.FREE,
+        isActive: row.isActive,
+        lastActivityAt: row.lastActivityAt ?? undefined,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       }));
