@@ -1080,17 +1080,19 @@ Digite o número:`;
   private async startRegistration(session: ConversationSession): Promise<void> {
     const message = `🚗 *Registrar Corrida*
 
-Você pode:
+*⚡ MODO RÁPIDO:*
+Digite apenas os números separados por espaço:
 
-*📱 MODO RÁPIDO:*
-Digite: \`ganho km\` ou \`ganho km combustível\`
+• \`45 12\`
+  → R$ 45 ganhos, 12 km rodados
 
-Exemplos:
-• \`45 12\` (R$ 45 ganhos, 12 km)
-• \`45 12 10\` (R$ 45, 12 km, R$ 10 combustível)
+• \`45 12 10\`
+  → R$ 45 ganhos, 12 km, R$ 10 combustível
 
 *📝 MODO GUIADO:*
-Ou responda: *Quanto você ganhou nesta corrida?*
+Ou digite qualquer texto para iniciar o passo a passo.
+
+*Quanto você ganhou nesta corrida?*
 (Digite apenas o valor em reais)`;
 
     await this.sendMessage(session.phone, message);
