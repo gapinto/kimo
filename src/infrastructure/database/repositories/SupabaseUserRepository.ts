@@ -9,6 +9,7 @@ interface UserRow {
   id: string;
   phone: string;
   name: string | null;
+  birth_date: string | null;
   weekly_goal: number | null;
   profile: string | null;
   subscription_plan: string;
@@ -161,6 +162,7 @@ export class SupabaseUserRepository implements IUserRepository {
       id: row.id,
       phone: Phone.create(row.phone),
       name: row.name ?? undefined,
+      birthDate: row.birth_date ? new Date(row.birth_date) : undefined,
       weeklyGoal: row.weekly_goal ?? undefined,
       profile: row.profile ? (row.profile as DriverProfile) : undefined,
       subscriptionPlan: (row.subscription_plan as SubscriptionPlan) ?? SubscriptionPlan.FREE,
@@ -179,6 +181,7 @@ export class SupabaseUserRepository implements IUserRepository {
       id: user.id,
       phone: user.phone.value,
       name: user.name ?? null,
+      birth_date: user.birthDate?.toISOString().split('T')[0] ?? null, // YYYY-MM-DD
       weekly_goal: user.weeklyGoal ?? null,
       profile: user.profile ?? null,
       subscription_plan: user.subscriptionPlan,
