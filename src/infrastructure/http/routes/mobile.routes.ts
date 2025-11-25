@@ -91,11 +91,11 @@ export function createMobileRoutes(): Router {
         maxKm: config.acceptanceCriteria?.maxKm || 20,
         peakHourMinValuePerKm: config.acceptanceCriteria?.peakHourMinValuePerKm || 1.2,
         
-        // Meta e progresso
-        dailyGoal,
-        todayEarnings: summary?.totalEarnings.value || 0,
-        todayTrips: summary?.tripsCount || 0,
-        todayKm: summary?.km || 0,
+      // Meta e progresso
+      dailyGoal,
+      todayEarnings: summary?.earnings.value || 0,
+      todayTrips: 0, // TODO: adicionar contador de trips no DailySummary
+      todayKm: summary?.km.value || 0,
         
         // Config do motorista
         fuelConsumption: config.fuelConsumption,
@@ -254,18 +254,18 @@ export function createMobileRoutes(): Router {
       weekAgo.setDate(weekAgo.getDate() - 7);
       const trips = await tripRepository.findByUserAndDateRange(userId, weekAgo, today);
 
-      const weekEarnings = trips.reduce((sum, trip) => sum + trip.earnings.value, 0);
-      const weekKm = trips.reduce((sum, trip) => sum + trip.km, 0);
-      const weekTrips = trips.length;
+    const weekEarnings = trips.reduce((sum, trip) => sum + trip.earnings.value, 0);
+    const weekKm = trips.reduce((sum, trip) => sum + trip.km.value, 0);
+    const weekTrips = trips.length;
 
-      res.json({
-        today: {
-          earnings: todaySummary?.totalEarnings.value || 0,
-          expenses: todaySummary?.totalExpenses.value || 0,
-          profit: todaySummary?.profit.value || 0,
-          km: todaySummary?.km || 0,
-          trips: todaySummary?.tripsCount || 0,
-        },
+    res.json({
+      today: {
+        earnings: todaySummary?.earnings.value || 0,
+        expenses: todaySummary?.expenses.value || 0,
+        profit: todaySummary?.profit.value || 0,
+        km: todaySummary?.km.value || 0,
+        trips: 0, // TODO: adicionar contador de trips no DailySummary
+      },
         week: {
           earnings: weekEarnings,
           km: weekKm,
