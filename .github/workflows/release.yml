@@ -1,0 +1,93 @@
+name: Build and Release Flutter APK
+
+on:
+  push:
+    tags:
+      - 'v*'  # Dispara quando criar tag v1.0.0, v1.1.0, etc
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.16.0'
+          channel: 'stable'
+      
+      - name: Get dependencies
+        working-directory: ./kimo_overlay
+        run: flutter pub get
+      
+      - name: Build APK
+        working-directory: ./kimo_overlay
+        run: flutter build apk --release
+      
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: KIMO Overlay ${{ steps.version.outputs.VERSION }}
+          body: |
+            📱 **KIMO Overlay** - Decisões Inteligentes em Segundos
+            
+            🚦 Semáforo overlay para motoristas de Uber/99
+            
+            ## 🆕 Novidades desta versão
+            
+            - Overlay inteligente sobre apps de corrida
+            - Análise automática de custos e lucro
+            - Estatísticas em tempo real
+            - Acompanhamento de meta diária
+            
+            ## 📦 Instalação
+            
+            1. **Baixar** `KIMO-Overlay.apk` abaixo
+            2. **Permitir** "Instalar apps desconhecidos" (Android vai perguntar)
+            3. **Instalar** o APK
+            4. **Abrir** o app e fazer login com seu telefone
+            
+            ## ⚠️ Permissões Necessárias
+            
+            O app vai pedir:
+            - 🔔 Acesso a notificações (para detectar corridas)
+            - 🪟 Exibir sobre outros apps (para mostrar overlay)
+            
+            ## 🆘 Problemas?
+            
+            Veja o [README](https://github.com/gapinto/kimo/blob/main/kimo_overlay/README.md) ou abra uma [Issue](https://github.com/gapinto/kimo/issues)
+            
+            ---
+            
+            **Desenvolvido com ❤️ para motoristas**
+          draft: false
+          prerelease: false
+      
+      - name: Upload APK to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./kimo_overlay/build/app/outputs/flutter-apk/app-release.apk
+          asset_name: KIMO-Overlay.apk
+          asset_content_type: application/vnd.android.package-archive
+
