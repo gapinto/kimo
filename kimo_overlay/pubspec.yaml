@@ -1,0 +1,53 @@
+name: kimo_overlay
+description: Overlay inteligente para motoristas de aplicativo - Decisões em segundos
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # HTTP requests
+  http: ^1.1.0
+  
+  # State management
+  provider: ^6.1.1
+  
+  # Local storage
+  shared_preferences: ^2.2.2
+  
+  # Overlay
+  flutter_overlay_window: ^0.4.6
+  
+  # Permissions
+  permission_handler: ^11.0.1
+  
+  # JSON
+  json_annotation: ^4.8.1
+  
+  # Icons
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  json_serializable: ^6.7.1
+  build_runner: ^2.4.6
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+  
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: fonts/Roboto-Regular.ttf
+        - asset: fonts/Roboto-Bold.ttf
+          weight: 700
+
