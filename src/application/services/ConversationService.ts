@@ -95,6 +95,33 @@ export class ConversationService {
         }
       }
 
+      // MODO DESCANSO: Se usuário está inativo, só aceitar comandos de reativação
+      if (session.userId) {
+        const user = await this.userRepository.findById(session.userId);
+        if (user && !user.isActive) {
+          // Verificar se é comando de reativação
+          if (
+            normalizedText === 'ativo' ||
+            normalizedText === 'voltar' ||
+            normalizedText === 'online' ||
+            normalizedText === 'on'
+          ) {
+            // Permite processar comando de reativação (continua normalmente)
+            session.state = ConversationState.IDLE;
+            await this.handleSetActive(session);
+            this.saveSession(session);
+            return;
+          }
+          
+          // Se não for comando de reativação, ignorar completamente (bot silencioso)
+          logger.info('User is inactive (rest mode), ignoring message', {
+            userId: session.userId,
+            message: text
+          });
+          return;
+        }
+      }
+
       // Comando rápido de corrida: "45 12" ou "45 12 5"
       const quickRegisterMatch = normalizedText.match(/^(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)(?:\s+(\d+(?:[.,]\d+)?))?$/);
       
@@ -166,19 +193,6 @@ export class ConversationService {
       ) {
         session.state = ConversationState.IDLE;
         await this.handleSetInactive(session);
-        this.saveSession(session);
-        return;
-      }
-
-      // ANTI-SPAM: Comando "ativo" - retoma lembretes
-      if (
-        normalizedText === 'ativo' ||
-        normalizedText === 'voltar' ||
-        normalizedText === 'online' ||
-        normalizedText === 'on'
-      ) {
-        session.state = ConversationState.IDLE;
-        await this.handleSetActive(session);
         this.saveSession(session);
         return;
       }
@@ -3140,9 +3154,13 @@ Digite o código ou comando:`;
       await this.userRepository.update(user);
 
       let message = `😴 *MODO DESCANSO ATIVADO*\n\n`;
-      message += `✅ Você não receberá mais lembretes automáticos\n\n`;
+      message += `✅ O bot ficará completamente silencioso\n\n`;
+      message += `🔇 Você NÃO receberá:\n`;
+      message += `• Lembretes automáticos\n`;
+      message += `• Respostas a comandos\n`;
+      message += `• Mensagens de menu\n\n`;
       message += `💡 Quando voltar a trabalhar, digite:\n`;
-      message += `• *ativo* ou *voltar* ou *online*`;
+      message += `*ativo* ou *voltar* ou *online*`;
 
       await this.sendMessage(session.phone, message);
 
