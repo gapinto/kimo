@@ -98,6 +98,14 @@ export class SchedulerService {
 
       for (const user of users) {
         try {
+          // ANTI-SPAM: Respeitar modo descanso
+          if (!user.isActive) {
+            logger.info('User is inactive (rest mode), skipping good morning', {
+              userId: user.id
+            });
+            continue;
+          }
+
           // Buscar resumo de ontem
           const yesterday = new Date();
           yesterday.setDate(yesterday.getDate() - 1);
@@ -154,6 +162,14 @@ export class SchedulerService {
 
       for (const user of users) {
         try {
+          // ANTI-SPAM: Respeitar modo descanso
+          if (!user.isActive) {
+            logger.info('User is inactive (rest mode), skipping weekly summary', {
+              userId: user.id
+            });
+            continue;
+          }
+
           const getWeeklyProgress = new GetWeeklyProgress(
             this.userRepository,
             this.dailySummaryRepository
@@ -218,6 +234,14 @@ export class SchedulerService {
 
       for (const user of users) {
         try {
+          // ANTI-SPAM: Respeitar modo descanso
+          if (!user.isActive) {
+            logger.info('User is inactive (rest mode), skipping registration reminder', {
+              userId: user.id
+            });
+            continue;
+          }
+
           // Verificar se já registrou algo hoje
           const todaySummary = await this.dailySummaryRepository.findByUserAndDate(
             user.id,
